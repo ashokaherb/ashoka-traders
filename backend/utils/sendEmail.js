@@ -19,20 +19,51 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
   });
 }
 
-const sendMail = async ({ to, subject, text }) => {
+/**
+ * Checks the SMTP login once at startup and logs the result, so a broken email setup shows
+ * up in the server logs straight away - not only when a customer's email silently fails.
+ * The classic Brevo failure is "525 Unauthorized IP address": the server's IP isn't in
+ * Brevo -> Security -> Authorised IPs (see DEPLOYMENT.md).
+ */
+const verifyEmailSetup = async () => {
   if (!transporter) {
+    console.warn("[EMAIL] SMTP not configured - emails will only be logged to the console.");
+    return;
+  }
+  try {
+    await transporter.verify();
+    console.log(`[EMAIL] SMTP login OK (${process.env.SMTP_HOST}) - order emails will be sent.`);
+  } catch (err) {
+    console.error(`[EMAIL] SMTP login FAILED (${process.env.SMTP_HOST}): ${err.message} - order emails will NOT be delivered until this is fixed.`);
+  }
+};
+
+/**
+ * @param {{ to: string, subject: string, text: string,
+ *           attachments?: Array<{ filename: string, content: Buffer, contentType?: string }> }} mail
+ */
+const sendMail = async ({ to, subject, text, attachments = [] }) => {
+  if (!transporter) {
+    const files = attachments.map((a) => `${a.filename} (${Math.round(a.content.length / 1024)} KB)`).join(", ");
     console.log(
-      `\n--- EMAIL (stub - no SMTP configured in .env) ---\nTo: ${to}\nSubject: ${subject}\n\n${text}\n---------------------------------------------------\n`
+      `\n--- EMAIL (stub - no SMTP configured in .env) ---\nTo: ${to}\nSubject: ${subject}${files ? `\nAttachments: ${files}` : ""}\n\n${text}\n---------------------------------------------------\n`
     );
     return;
   }
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
-    to,
-    subject,
-    text,
-  });
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+      to,
+      subject,
+      text,
+      attachments,
+    });
+    console.log(`[EMAIL SENT] "${subject}" -> ${to}${attachments.length ? ` (+${attachments.length} attachment)` : ""}`);
+  } catch (err) {
+    console.error(`[EMAIL FAILED] "${subject}" -> ${to}: ${err.message}`);
+    throw err;
+  }
 };
 
 // Plain-text summary shared by both emails below.
@@ -52,21 +83,32 @@ const formatOrderSummary = (order) => {
   ].join("\n");
 };
 
-/** Sent to the customer right after their order is placed/paid. */
-const sendOrderConfirmationEmail = async (user, order) => {
+/**
+ * Sent to the customer right after their order is placed/paid.
+ * @param {Array} [attachments] - the order's bill PDF (see orderController notifyByEmail)
+ */
+const sendOrderConfirmationEmail = async (user, order, attachments = []) => {
   await sendMail({
     to: user.email,
     subject: `Your Ashoka Traders order #${order._id} is confirmed`,
-    text: `Hi ${user.name},\n\nThanks for your order! Here's a summary:\n\n${formatOrderSummary(order)}\n\nWe'll let you know as it ships.`,
+    text:
+      `Hi ${user.name},\n\nThanks for your order! Here's a summary:\n\n${formatOrderSummary(order)}\n\n` +
+      (attachments.length ? "Your bill is attached as a PDF.\n\n" : "") +
+      "We'll let you know as it ships.",
+    attachments,
   });
 };
 
-/** Sent to the shop's admin email (ADMIN_EMAIL in .env) whenever a new order comes in. */
-const sendAdminNewOrderAlert = async (order) => {
+/**
+ * Sent to the shop's admin email (ADMIN_EMAIL in .env) whenever a new order comes in.
+ * @param {Array} [attachments] - the order's bill PDF
+ */
+const sendAdminNewOrderAlert = async (order, attachments = []) => {
   await sendMail({
     to: process.env.ADMIN_EMAIL,
     subject: `New order received - #${order._id}`,
-    text: `A new order was just placed.\n\n${formatOrderSummary(order)}`,
+    text: `A new order was just placed.\n\n${formatOrderSummary(order)}${attachments.length ? "\n\nThe customer's bill is attached." : ""}`,
+    attachments,
   });
 };
 
@@ -127,6 +169,7 @@ const sendAdminContactQueryAlert = async (query) => {
 };
 
 module.exports = {
+  verifyEmailSetup,
   sendOrderConfirmationEmail,
   sendAdminNewOrderAlert,
   sendAdminRefundRequiredAlert,

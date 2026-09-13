@@ -5,6 +5,7 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const mongoSanitize = require("express-mongo-sanitize");
 const connectDB = require("./config/db");
+const { verifyEmailSetup } = require("./utils/sendEmail");
 const { NODE_ENV, isProduction, TRUST_PROXY, checkProductionConfig } = require("./config/env");
 const errorHandler = require("./middleware/errorHandler");
 const {
@@ -159,6 +160,7 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT} (${NODE_ENV} mode)`);
+  verifyEmailSetup(); // logs "[EMAIL] SMTP login OK" or the exact reason it fails
 });
 
 // --- Last-resort process guards (defence in depth) ---

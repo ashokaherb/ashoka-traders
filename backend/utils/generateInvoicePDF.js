@@ -1,4 +1,5 @@
 const path = require("path");
+const { Writable } = require("stream");
 const PDFDocument = require("pdfkit");
 const { resolveDocumentType, COMPOSITION_DISCLOSURE } = require("./invoiceType");
 const { amountInWords } = require("./amountInWords");
@@ -359,10 +360,8 @@ function generateInvoicePDF(order, settings, res) {
   const doc = new PDFDocument({ size: "A4", margin: MARGIN, info: { Title: `${TITLES[type]} ${order.billNumber || ""}`.trim() } });
 
   if (typeof res.setHeader === "function") {
-    const prefix = { bill_of_supply: "bill-of-supply", tax_invoice: "invoice", receipt: "receipt" }[type];
-    const fileId = (order.billNumber || order._id.toString()).replace(/\//g, "-");
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${prefix}-${fileId}.pdf"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${invoiceFileName(order, settings)}"`);
   }
   doc.pipe(res);
 
@@ -375,4 +374,34 @@ function generateInvoicePDF(order, settings, res) {
   doc.end();
 }
 
-module.exports = { generateInvoicePDF };
+/** e.g. "bill-of-supply-AT-26-27-0001.pdf" - same name for downloads and email attachments. */
+function invoiceFileName(order, settings) {
+  const prefix = { bill_of_supply: "bill-of-supply", tax_invoice: "invoice", receipt: "receipt" }[resolveDocumentType(settings)];
+  const fileId = (order.billNumber || order._id.toString()).replace(/\//g, "-");
+  return `${prefix}-${fileId}.pdf`;
+}
+
+/**
+ * Renders the same bill as generateInvoicePDF into memory, for attaching to emails.
+ * @returns {Promise<Buffer>}
+ */
+function renderInvoicePDFBuffer(order, settings) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    const sink = new Writable({
+      write(chunk, _encoding, callback) {
+        chunks.push(chunk);
+        callback();
+      },
+    });
+    sink.on("finish", () => resolve(Buffer.concat(chunks)));
+    sink.on("error", reject);
+    try {
+      generateInvoicePDF(order, settings, sink);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+module.exports = { generateInvoicePDF, renderInvoicePDFBuffer, invoiceFileName };

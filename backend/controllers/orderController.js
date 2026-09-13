@@ -20,12 +20,28 @@ const {
   sendAdminRefundRequiredAlert,
 } = require("../utils/sendEmail");
 const { sendWhatsAppMessage } = require("../utils/whatsappService");
-const { generateInvoicePDF } = require("../utils/generateInvoicePDF");
+const { generateInvoicePDF, renderInvoicePDFBuffer, invoiceFileName } = require("../utils/generateInvoicePDF");
 
 // Fire-and-forget email helper - a slow/broken mail server should never block an order.
+// Both emails (customer confirmation + admin new-order alert) carry the order's bill PDF,
+// the same document as the "Download Invoice" button. If the PDF can't be built for any
+// reason, the emails still go out without it.
 const notifyByEmail = (user, order) => {
-  sendOrderConfirmationEmail(user, order).catch((err) => console.error("Email error:", err.message));
-  sendAdminNewOrderAlert(order).catch((err) => console.error("Email error:", err.message));
+  (async () => {
+    let attachments = [];
+    try {
+      const settings = await getSettings();
+      const orderForBill = { ...order.toObject(), user: { name: user.name, email: user.email } };
+      const pdf = await renderInvoicePDFBuffer(orderForBill, settings);
+      attachments = [{ filename: invoiceFileName(order, settings), content: pdf, contentType: "application/pdf" }];
+    } catch (err) {
+      console.error(`[EMAIL] Could not build bill PDF for order ${order._id}, sending emails without it:`, err.message);
+    }
+    await Promise.allSettled([
+      sendOrderConfirmationEmail(user, order, attachments),
+      sendAdminNewOrderAlert(order, attachments),
+    ]); // failures are already logged by sendMail
+  })().catch((err) => console.error("Email error:", err.message));
 };
 
 // Transactional WhatsApp messages - order confirmation to the customer and a new-order
