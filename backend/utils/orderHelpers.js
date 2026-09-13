@@ -130,20 +130,95 @@ async function resolveOrderPricing({ items, couponCode }) {
 }
 
 /**
- * Actually deducts stock in the DB. Call this only once an order is confirmed
- * (COD placed, or Razorpay payment verified) - never before.
+ * Thrown when stock runs out at the moment of the actual decrement - even if
+ * resolveOrderPricing's earlier check said it was available. Carries the item
+ * that failed so callers can tell the customer exactly what sold out.
  */
-async function decrementStock(resolvedItems) {
+class OutOfStockError extends OrderValidationError {
+  constructor(item) {
+    super(`${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ""} just sold out`, 409);
+    this.item = item;
+  }
+}
+
+/**
+ * Deducts stock for every line of an order, atomically. (Audit finding C3.)
+ *
+ * WHY: resolveOrderPricing's "quantity > stock" check and a later plain $inc are two
+ * separate steps - five simultaneous checkouts for the last unit all pass the check
+ * before any of them decrements, and stock goes negative (overselling).
+ *
+ * HOW: each line is ONE conditional update - "decrement, but only if stock >= quantity".
+ * MongoDB evaluates the condition and applies the $inc as a single operation, so two
+ * requests can never both take the last unit. If nothing matched (modifiedCount 0),
+ * that line has sold out.
+ *
+ * MUST be called with a transaction session (see runInTransaction). If line 2 fails,
+ * throwing aborts the transaction and line 1's decrement is rolled back too - a cart
+ * is never half-deducted.
+ *
+ * @throws {OutOfStockError} on the first line that doesn't have enough stock
+ */
+async function decrementStock(resolvedItems, session) {
+  if (!session) {
+    throw new Error("decrementStock must run inside a transaction (pass a session)");
+  }
+
   for (const item of resolvedItems) {
+    let result;
     if (item.variantId) {
-      await Product.updateOne(
-        { _id: item.product, "variants._id": item.variantId },
-        { $inc: { "variants.$.stock": -item.quantity } }
+      // $elemMatch makes BOTH conditions apply to the same variant - without it, Mongo
+      // could match "some variant has this id" and "some OTHER variant has enough stock".
+      // The positional "$" then updates exactly the variant $elemMatch found.
+      result = await Product.updateOne(
+        {
+          _id: item.product,
+          variants: { $elemMatch: { _id: item.variantId, stock: { $gte: item.quantity } } },
+        },
+        { $inc: { "variants.$.stock": -item.quantity } },
+        { session }
       );
     } else {
-      await Product.updateOne({ _id: item.product }, { $inc: { stock: -item.quantity } });
+      result = await Product.updateOne(
+        { _id: item.product, stock: { $gte: item.quantity } },
+        { $inc: { stock: -item.quantity } },
+        { session }
+      );
+    }
+
+    if (result.modifiedCount === 0) {
+      throw new OutOfStockError(item);
     }
   }
 }
 
-module.exports = { OrderValidationError, resolveOrderPricing, decrementStock, getSettings };
+/**
+ * Runs `work(session)` inside a MongoDB transaction: everything it writes commits
+ * together, or - if it throws - none of it does. withTransaction also retries
+ * automatically on transient conflicts (two checkouts touching the same product),
+ * which is safe because every write inside re-checks stock atomically.
+ *
+ * Requires a replica set - MongoDB Atlas always is one. (A plain local mongod is not;
+ * run it as a single-node replica set for local development.)
+ */
+async function runInTransaction(work) {
+  const session = await Product.startSession();
+  try {
+    let result;
+    await session.withTransaction(async () => {
+      result = await work(session);
+    });
+    return result;
+  } finally {
+    await session.endSession();
+  }
+}
+
+module.exports = {
+  OrderValidationError,
+  OutOfStockError,
+  resolveOrderPricing,
+  decrementStock,
+  runInTransaction,
+  getSettings,
+};

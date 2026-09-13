@@ -13,6 +13,8 @@ const mongoose = require("mongoose");
  *   processing -> a verify request has claimed it (stops two parallel verifies both succeeding)
  *   consumed   -> turned into a real Order; can never be used again
  *   flagged    -> Razorpay's confirmed amount didn't match; kept for investigation
+ *   needs_refund -> paid, but an item sold out before stock could be deducted (audit C3);
+ *                   a Cancelled + refund_requested Order was created for the admin to refund
  *
  * Old intents clean themselves up via the TTL index on expiresAt (see below).
  */
@@ -46,7 +48,7 @@ const paymentIntentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["created", "processing", "consumed", "flagged"],
+      enum: ["created", "processing", "consumed", "flagged", "needs_refund"],
       default: "created",
     },
     order: { type: mongoose.Schema.Types.ObjectId, ref: "Order", default: null }, // set once consumed

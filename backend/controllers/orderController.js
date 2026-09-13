@@ -2,7 +2,13 @@ const crypto = require("crypto");
 const Order = require("../models/Order");
 const PaymentIntent = require("../models/PaymentIntent");
 const razorpayInstance = require("../utils/razorpay");
-const { resolveOrderPricing, decrementStock, getSettings } = require("../utils/orderHelpers");
+const {
+  resolveOrderPricing,
+  decrementStock,
+  runInTransaction,
+  OutOfStockError,
+  getSettings,
+} = require("../utils/orderHelpers");
 const { sendOrderConfirmationEmail, sendAdminNewOrderAlert } = require("../utils/sendEmail");
 const { sendWhatsAppMessage } = require("../utils/whatsappService");
 const { generateInvoicePDF } = require("../utils/generateInvoicePDF");
@@ -58,21 +64,33 @@ const createOrder = async (req, res) => {
 
     const pricing = await resolveOrderPricing({ items, couponCode });
 
-    const order = await Order.create({
-      user: req.user._id,
-      items: pricing.resolvedItems,
-      address,
-      subtotal: pricing.subtotal,
-      shippingFee: pricing.shippingFee,
-      discount: pricing.discount,
-      couponCode: pricing.appliedCouponCode,
-      total: pricing.total,
-      paymentMethod: "COD",
-      paymentStatus: "pending",
-      orderStatus: "Placed",
+    // Stock deduction and order creation commit together (audit C3). If any item sold out
+    // since the check above, decrementStock throws, the transaction aborts, every earlier
+    // decrement is rolled back, and no order record is ever written.
+    const order = await runInTransaction(async (session) => {
+      await decrementStock(pricing.resolvedItems, session);
+      const [created] = await Order.create(
+        [
+          {
+            user: req.user._id,
+            items: pricing.resolvedItems,
+            address,
+            subtotal: pricing.subtotal,
+            shippingFee: pricing.shippingFee,
+            discount: pricing.discount,
+            couponCode: pricing.appliedCouponCode,
+            total: pricing.total,
+            paymentMethod: "COD",
+            paymentStatus: "pending",
+            orderStatus: "Placed",
+          },
+        ],
+        { session } // array form is required by Mongoose when passing options
+      );
+      return created;
     });
 
-    await decrementStock(pricing.resolvedItems);
+    // Notifications only after the transaction has committed
     notifyByEmail(req.user, order);
     notifyByWhatsApp(req.user, order);
 
@@ -264,9 +282,7 @@ const verifyRazorpayPayment = async (req, res) => {
     }
 
     // Built from the STORED intent only - not from anything in req.body except the address.
-    // NOTE: stock is not re-checked here. The customer has already paid for these items;
-    // stock reservation is its own audit finding (C3).
-    const order = await Order.create({
+    const orderFields = {
       user: req.user._id,
       items: claimed.items,
       address,
@@ -276,19 +292,57 @@ const verifyRazorpayPayment = async (req, res) => {
       couponCode: claimed.couponCode,
       total: claimed.total,
       paymentMethod: "Razorpay",
-      paymentStatus: "paid",
-      orderStatus: "Placed",
       razorpayOrderId,
       razorpayPaymentId,
-    });
+    };
 
-    // Burn the intent - it can never produce another order.
-    await PaymentIntent.updateOne(
-      { _id: claimed._id },
-      { $set: { status: "consumed", order: order._id, razorpayPaymentId } }
-    );
+    let order;
+    try {
+      // Stock deduction, order creation and burning the intent all commit together
+      // (audit C3) - or none of them do.
+      order = await runInTransaction(async (session) => {
+        await decrementStock(claimed.items, session);
+        const [created] = await Order.create(
+          [{ ...orderFields, paymentStatus: "paid", orderStatus: "Placed" }],
+          { session }
+        );
+        await PaymentIntent.updateOne(
+          { _id: claimed._id },
+          { $set: { status: "consumed", order: created._id, razorpayPaymentId } },
+          { session }
+        );
+        return created;
+      });
+    } catch (error) {
+      if (!(error instanceof OutOfStockError)) throw error; // handled by the outer catch
 
-    await decrementStock(claimed.items);
+      // The customer HAS paid, but an item sold out between checkout and payment. The
+      // transaction rolled back, so no stock was touched. Don't just return an error and
+      // lose track of their money - record a cancelled order with a refund request so it
+      // shows up in the admin's order list AND the customer's "My Orders".
+      // (Refunds themselves are issued in the Razorpay dashboard.)
+      const refundOrder = await Order.create({
+        ...orderFields,
+        paymentStatus: "refund_requested",
+        orderStatus: "Cancelled",
+      });
+      await PaymentIntent.updateOne(
+        { _id: claimed._id },
+        // No TTL - keep this record until the refund is dealt with
+        { $set: { status: "needs_refund", order: refundOrder._id, razorpayPaymentId, expiresAt: null } }
+      );
+      console.error(
+        `[REFUND NEEDED] Paid order could not be fulfilled - ${error.message}.`,
+        JSON.stringify({ orderId: refundOrder._id, razorpayPaymentId, amount: claimed.total, userId: req.user._id })
+      );
+
+      return res.status(409).json({
+        message: `Sorry - ${error.message} while your payment was processing, so we couldn't place this order. Your payment of Rs.${claimed.total} will be refunded in full to your original payment method.`,
+        orderId: refundOrder._id,
+        refundPending: true,
+      });
+    }
+
     notifyByEmail(req.user, order);
     notifyByWhatsApp(req.user, order);
 
