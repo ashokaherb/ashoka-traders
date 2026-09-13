@@ -317,10 +317,14 @@ cd admin && npm run dev
   more is needed. Set it back to 0 to remove the minimum.
 
 **4. GST / plain invoice**
-- With **Settings -> GST Number** left blank, download an invoice from My Orders/Order
-  Success/admin Order Detail - it's headed "RECEIPT".
-- Set a GST Number (e.g. `22AAAAA0000A1Z5`) and save, then download the invoice for the
-  same order again - it's now headed "TAX INVOICE" and shows the GSTIN.
+The document type follows **Settings -> GST Registration -> GST Scheme**. Download the
+invoice from My Orders/Order Success/admin Order Detail after each change:
+- **Not Registered** (or no GSTIN) - headed "RECEIPT", no GST details.
+- **Composition** + GSTIN - headed "BILL OF SUPPLY", shows the GSTIN and the mandatory line
+  "Composition taxable person, not eligible to collect tax on supplies", and no tax rate or
+  amount anywhere.
+- **Regular** + GSTIN - headed "TAX INVOICE" with per-item CGST/SGST (customer in the store's
+  state) or IGST, backed out of the tax-inclusive prices at the configured GST rate.
 
 **5. SEO - slugs, sitemap, meta tags**
 - Look at a product's URL - it should read like `/product/basmati-rice`, not a raw id.
@@ -438,8 +442,8 @@ simply unset):
       reliable than a personal Gmail account for this.
 - [ ] **Google Analytics ID** - create a GA4 property and set `VITE_GA_MEASUREMENT_ID` in
       `storefront/.env`.
-- [ ] **GST number** - set it in Admin -> Settings once you have it, so invoices generate as
-      proper GST Tax Invoices (leave blank if you're not GST-registered).
+- [ ] **GST registration** - in Admin -> Settings, pick the GST Scheme (currently Composition)
+      and enter the real GSTIN, so orders get a proper Bill of Supply.
 - [ ] **Store info** - fill in Admin -> Settings' store name, support email, and support
       phone; fill in the real values in ContactUs.jsx's placeholder phone/email/WhatsApp/
       address, and the placeholder social links in Footer.jsx.

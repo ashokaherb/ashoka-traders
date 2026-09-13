@@ -18,6 +18,7 @@ const orderItemSchema = new mongoose.Schema(
     variantLabel: { type: String, default: null }, // e.g. "500g", null if no variant
     quantity: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true, min: 0 }, // unit price AT THE TIME OF ORDER
+    hsnCode: { type: String, default: "" }, // printed on the bill
   },
   { _id: false }
 );
@@ -60,6 +61,9 @@ const orderSchema = new mongoose.Schema(
       default: "Placed",
     },
     trackingNumber: { type: String, default: "" },
+    // Consecutive per financial year, e.g. "AT/26-27/0001" - see utils/billNumber.js.
+    // Null for orders that never became a sale (paid but sold out -> refunded).
+    billNumber: { type: String, default: null },
 
     // Only populated for Razorpay orders, used to cross-reference with the Razorpay dashboard
     razorpayOrderId: { type: String, default: null },
@@ -74,6 +78,12 @@ const orderSchema = new mongoose.Schema(
 orderSchema.index(
   { razorpayPaymentId: 1 },
   { unique: true, partialFilterExpression: { razorpayPaymentId: { $type: "string" } } }
+);
+
+// A bill number can never be issued twice (null for orders without one, hence partial).
+orderSchema.index(
+  { billNumber: 1 },
+  { unique: true, partialFilterExpression: { billNumber: { $type: "string" } } }
 );
 
 module.exports = mongoose.model("Order", orderSchema);

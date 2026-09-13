@@ -34,6 +34,7 @@ export default function Checkout() {
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState(null); // { code, discount }
   const [couponError, setCouponError] = useState("");
+  const [availableCoupons, setAvailableCoupons] = useState([]);
 
   const [paymentMethod, setPaymentMethod] = useState("COD");
   const [submitting, setSubmitting] = useState(false);
@@ -56,6 +57,16 @@ export default function Checkout() {
   useEffect(() => {
     api.get("/settings").then((res) => setSettings(res.data));
   }, []);
+
+  // Coupons the customer can pick from. Re-fetched if the subtotal changes, since that
+  // decides which ones the cart qualifies for. Purely a convenience list - the backend
+  // re-checks every rule when the coupon is applied and again when the order is placed.
+  useEffect(() => {
+    api
+      .get("/coupons/available", { params: { subtotal } })
+      .then((res) => setAvailableCoupons(res.data))
+      .catch(() => setAvailableCoupons([]));
+  }, [subtotal]);
 
   const shippingFee = subtotal >= settings.freeShippingThreshold ? 0 : settings.flatShippingFee;
   const discount = couponApplied?.discount || 0;
@@ -80,16 +91,24 @@ export default function Checkout() {
     }
   };
 
-  const handleApplyCoupon = async () => {
+  // `code` is passed directly by the "Apply" buttons on the available-coupon cards.
+  const handleApplyCoupon = async (code = couponCode) => {
     setCouponError("");
-    if (!couponCode.trim()) return;
+    if (!code.trim()) return;
+    setCouponCode(code);
     try {
-      const { data } = await api.post("/coupons/validate", { code: couponCode.trim(), subtotal });
+      const { data } = await api.post("/coupons/validate", { code: code.trim(), subtotal });
       setCouponApplied(data);
     } catch (err) {
       setCouponApplied(null);
       setCouponError(err.response?.data?.message || "Could not apply coupon");
     }
+  };
+
+  const handleRemoveCoupon = () => {
+    setCouponApplied(null);
+    setCouponCode("");
+    setCouponError("");
   };
 
   const saveAddressIfRequested = async () => {
@@ -354,23 +373,76 @@ export default function Checkout() {
           <div className="flex gap-2">
             <input
               placeholder="Coupon code"
+              aria-label="Coupon code"
               value={couponCode}
-              onChange={(e) => setCouponCode(e.target.value)}
-              className="border rounded px-3 py-2 flex-1 text-sm"
+              onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+              className="border rounded px-3 py-2 flex-1 min-w-0 text-sm uppercase"
             />
-            <button
-              type="button"
-              onClick={handleApplyCoupon}
-              className="bg-gray-900 text-white rounded px-3 text-sm hover:bg-gray-800"
-            >
-              Apply
-            </button>
+            {couponApplied ? (
+              <button
+                type="button"
+                onClick={handleRemoveCoupon}
+                className="bg-gray-200 text-gray-700 rounded px-3 text-sm hover:bg-gray-300"
+              >
+                Remove
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleApplyCoupon()}
+                className="bg-gray-900 text-white rounded px-3 text-sm hover:bg-gray-800"
+              >
+                Apply
+              </button>
+            )}
           </div>
           {couponError && <p className="text-xs text-red-500 mt-1">{couponError}</p>}
           {couponApplied && (
             <p className="text-xs text-brand-700 mt-1">Coupon "{couponApplied.code}" applied!</p>
           )}
         </div>
+
+        {availableCoupons.length > 0 && (
+          <div className="mt-5">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Available Coupons</h3>
+            <ul className="flex flex-col gap-2">
+              {availableCoupons.map((c) => {
+                const applied = couponApplied?.code === c.code;
+                return (
+                  <li
+                    key={c.code}
+                    className={`border border-dashed rounded p-3 flex items-center justify-between gap-3 ${
+                      c.eligible ? "border-brand-600 bg-brand-50/40" : "border-gray-300 bg-gray-50 opacity-70"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-mono text-sm font-semibold text-gray-800">{c.code}</p>
+                      <p className={`text-sm font-bold ${c.eligible ? "text-brand-700" : "text-gray-500"}`}>
+                        {c.discountType === "percent" ? `${c.value}% OFF` : `₹${c.value} OFF`}
+                      </p>
+                      {c.minOrderValue > 0 && (
+                        <p className="text-xs text-gray-500">On orders above ₹{c.minOrderValue}</p>
+                      )}
+                      {!c.eligible && (
+                        <p className="text-xs text-amber-700 mt-0.5">Add ₹{c.shortBy} more to use this coupon</p>
+                      )}
+                    </div>
+                    {c.eligible && (
+                      <button
+                        type="button"
+                        onClick={() => handleApplyCoupon(c.code)}
+                        disabled={applied}
+                        className="shrink-0 text-sm font-semibold text-brand-700 border border-brand-600 rounded px-3 py-1 hover:bg-brand-600 hover:text-white disabled:bg-brand-600 disabled:text-white"
+                      >
+                        {applied ? "Applied" : "Apply"}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );

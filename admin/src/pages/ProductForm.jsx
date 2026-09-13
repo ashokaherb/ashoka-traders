@@ -17,6 +17,7 @@ export default function ProductForm() {
     price: "",
     category: "",
     stock: "",
+    hsnCode: "",
     images: [], // array of Cloudinary URLs, populated by ImageUploader below
     lowStockThreshold: 5,
     isNewArrival: true,
@@ -50,6 +51,7 @@ export default function ProductForm() {
         price: p.price,
         category: p.category?._id || p.category,
         stock: p.stock,
+        hsnCode: p.hsnCode || "",
         images: p.images || [],
         lowStockThreshold: p.lowStockThreshold ?? 5,
         isNewArrival: p.isNewArrival ?? true,
@@ -90,6 +92,7 @@ export default function ProductForm() {
       price: Number(form.price),
       category: form.category,
       stock: Number(form.stock),
+      hsnCode: form.hsnCode.trim(),
       lowStockThreshold: Number(form.lowStockThreshold),
       isNewArrival: form.isNewArrival,
       rating: Number(form.rating),
@@ -228,6 +231,25 @@ export default function ProductForm() {
                 className="w-full border rounded px-3 py-2"
               />
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="hsnCode" className="block text-sm font-medium text-gray-700 mb-1">
+              HSN Code <span className="font-normal text-gray-400">(optional)</span>
+            </label>
+            <input
+              id="hsnCode"
+              name="hsnCode"
+              value={form.hsnCode}
+              onChange={handleChange}
+              inputMode="numeric"
+              pattern="\d{4}|\d{6}|\d{8}"
+              title="4, 6 or 8 digits"
+              maxLength={8}
+              placeholder="e.g. 0802"
+              className="w-full border rounded px-3 py-2"
+            />
+            <p className="text-xs text-gray-400 mt-1">Printed on the customer's bill. Ask your CA if unsure.</p>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-gray-600">

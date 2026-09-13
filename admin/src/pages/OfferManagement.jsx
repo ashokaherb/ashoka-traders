@@ -99,11 +99,15 @@ export default function OfferManagement() {
   return (
     <div>
       <div className="max-w-3xl mx-auto px-4 py-6">
-        <h1 className="text-xl font-bold text-gray-800 mb-4">Offers &amp; Banners</h1>
+        <h1 className="text-xl font-bold text-gray-800 mb-4">Offers &amp; Sales</h1>
 
         {error && <p className="mb-4 text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>}
 
         <form onSubmit={handleSubmit} className="bg-white p-4 rounded-lg shadow-sm mb-6 flex flex-col gap-3">
+          <h2 className="font-semibold text-gray-800">{editingId ? "Edit Offer" : "Create Offer"}</h2>
+          <p className="-mt-2 text-xs text-gray-500">
+            Percentage discount on a product category or the whole store.
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <input
               name="title"

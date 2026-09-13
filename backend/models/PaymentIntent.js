@@ -28,6 +28,7 @@ const intentItemSchema = new mongoose.Schema(
     variantLabel: { type: String, default: null },
     quantity: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true, min: 0 }, // server-calculated unit price
+    hsnCode: { type: String, default: "" },
   },
   { _id: false }
 );

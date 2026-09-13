@@ -7,8 +7,11 @@ const {
   decrementStock,
   runInTransaction,
   OutOfStockError,
+  OrderValidationError,
   getSettings,
 } = require("../utils/orderHelpers");
+const { claimCouponUse } = require("../utils/couponRules");
+const { nextBillNumber, ensureBillNumber } = require("../utils/billNumber");
 const {
   sendOrderConfirmationEmail,
   sendAdminNewOrderAlert,
@@ -72,6 +75,11 @@ const createOrder = async (req, res) => {
   // decrement is rolled back, and no order record is ever written.
   const order = await runInTransaction(async (session) => {
     await decrementStock(pricing.resolvedItems, session);
+    // Count the coupon use as part of the same transaction - if the last use was taken a
+    // moment ago, this aborts everything (stock included) and the customer is told why.
+    if (!(await claimCouponUse(pricing.appliedCouponCode, session))) {
+      throw new OrderValidationError("This coupon has reached its usage limit");
+    }
     const [created] = await Order.create(
       [
         {
@@ -83,6 +91,7 @@ const createOrder = async (req, res) => {
           discount: pricing.discount,
           couponCode: pricing.appliedCouponCode,
           total: pricing.total,
+          billNumber: await nextBillNumber(new Date(), session),
           paymentMethod: "COD",
           paymentStatus: "pending",
           orderStatus: "Placed",
@@ -298,8 +307,24 @@ const verifyRazorpayPayment = async (req, res) => {
       // (audit C3) - or none of them do.
       order = await runInTransaction(async (session) => {
         await decrementStock(claimed.items, session);
+        // Already paid at the discounted price, so the order goes through even if the
+        // coupon's last use was taken while this customer was paying.
+        if (claimed.couponCode) {
+          const withinLimit = await claimCouponUse(claimed.couponCode, session);
+          if (!withinLimit) {
+            await claimCouponUse(claimed.couponCode, session, { enforceLimit: false });
+            console.warn(`[COUPON LIMIT EXCEEDED] ${claimed.couponCode} used past its limit by paid order (${razorpayOrderId})`);
+          }
+        }
         const [created] = await Order.create(
-          [{ ...orderFields, paymentStatus: "paid", orderStatus: "Placed" }],
+          [
+            {
+              ...orderFields,
+              billNumber: await nextBillNumber(new Date(), session),
+              paymentStatus: "paid",
+              orderStatus: "Placed",
+            },
+          ],
           { session }
         );
         await PaymentIntent.updateOne(
@@ -386,7 +411,7 @@ const getOrderById = async (req, res) => {
 
 /**
  * @route   GET /api/orders/:id/invoice
- * @desc    Download a PDF invoice (GST "Tax Invoice" if Settings.gstNumber is set,
+ * @desc    Download a PDF invoice (Bill of Supply / Tax Invoice / receipt per Settings.gstScheme,
  *          otherwise a plain receipt) - owner or admin only.
  * @access  Private
  */
@@ -400,6 +425,7 @@ const downloadInvoice = async (req, res) => {
   }
 
   const settings = await getSettings();
+  await ensureBillNumber(order);
   generateInvoicePDF(order, settings, res);
 };
 

@@ -74,6 +74,13 @@ const productSchema = new mongoose.Schema(
     },
     // Admin dashboard's "Low Stock" widget flags this product when stock (or any
     // variant's stock) falls at or below this number.
+    // HSN code (goods classification under GST) - printed on the bill/invoice. Optional.
+    hsnCode: {
+      type: String,
+      default: "",
+      trim: true,
+      match: [/^(\d{4}|\d{6}|\d{8})?$/, "HSN code must be 4, 6 or 8 digits"],
+    },
     lowStockThreshold: {
       type: Number,
       default: 5,

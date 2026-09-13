@@ -143,6 +143,7 @@ const createProduct = async (req, res) => {
     stock,
     variants,
     images,
+    hsnCode,
     lowStockThreshold,
     isNewArrival,
     rating,
@@ -161,6 +162,7 @@ const createProduct = async (req, res) => {
     stock: stock || 0,
     variants: variants || [],
     images: images || [],
+    ...(hsnCode !== undefined && { hsnCode }),
     ...(lowStockThreshold !== undefined && { lowStockThreshold }),
     ...(isNewArrival !== undefined && { isNewArrival }),
     ...(rating !== undefined && { rating }),
@@ -191,6 +193,7 @@ const updateProduct = async (req, res) => {
     variants,
     images,
     isActive,
+    hsnCode,
     lowStockThreshold,
     isNewArrival,
     rating,
@@ -205,6 +208,7 @@ const updateProduct = async (req, res) => {
   if (variants !== undefined) product.variants = variants;
   if (images !== undefined) product.images = images;
   if (isActive !== undefined) product.isActive = isActive;
+  if (hsnCode !== undefined) product.hsnCode = hsnCode;
   if (lowStockThreshold !== undefined) product.lowStockThreshold = lowStockThreshold;
   if (isNewArrival !== undefined) product.isNewArrival = isNewArrival;
   if (rating !== undefined) product.rating = rating;

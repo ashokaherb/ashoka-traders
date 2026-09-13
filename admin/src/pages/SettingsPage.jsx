@@ -7,8 +7,30 @@ const emptyForm = {
   flatShippingFee: 0,
   minimumOrderValue: 0,
   gstNumber: "",
+  gstScheme: "not_registered",
+  gstRate: 5,
+  storeState: "",
+  storeAddress: "",
+  panNumber: "",
+  invoiceTerms: "",
   supportEmail: "",
   supportPhone: "",
+};
+
+// What each GST scheme means, shown next to the dropdown so the right one gets picked.
+const GST_SCHEME_OPTIONS = {
+  composition: {
+    label: "Composition",
+    help: 'GST-registered under the Composition Scheme. Orders get a "Bill of Supply" with your GSTIN and no tax shown - you cannot charge GST separately.',
+  },
+  regular: {
+    label: "Regular",
+    help: 'Normal GST registration. Orders get a "Tax Invoice" showing CGST/SGST or IGST for each item.',
+  },
+  not_registered: {
+    label: "Not Registered",
+    help: "No GST registration. Orders get a plain receipt with no GST details.",
+  },
 };
 
 // Editor for the single Settings document (created automatically on first save if
@@ -31,6 +53,12 @@ export default function SettingsPage() {
           flatShippingFee: s.flatShippingFee ?? 0,
           minimumOrderValue: s.minimumOrderValue ?? 0,
           gstNumber: s.gstNumber || "",
+          gstScheme: s.gstScheme || "not_registered",
+          gstRate: s.gstRate ?? 5,
+          storeState: s.storeState || "",
+          storeAddress: s.storeAddress || "",
+          panNumber: s.panNumber || "",
+          invoiceTerms: s.invoiceTerms || "",
           supportEmail: s.supportEmail || "",
           supportPhone: s.supportPhone || "",
         });
@@ -51,6 +79,7 @@ export default function SettingsPage() {
       freeShippingThreshold: Number(form.freeShippingThreshold),
       flatShippingFee: Number(form.flatShippingFee),
       minimumOrderValue: Number(form.minimumOrderValue),
+      gstRate: Number(form.gstRate),
     };
 
     try {
@@ -134,21 +163,142 @@ export default function SettingsPage() {
             </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              GST Number (optional)
-            </label>
-            <input
-              name="gstNumber"
-              value={form.gstNumber}
-              onChange={handleChange}
-              placeholder="e.g. 22AAAAA0000A1Z5"
-              className="w-full border rounded px-3 py-2"
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              If set, order invoices are generated as GST "Tax Invoice"s. Leave blank for a plain receipt instead.
-            </p>
-          </div>
+          {/* GST registration - decides whether orders get a Bill of Supply, Tax Invoice or
+              plain receipt (backend/utils/invoiceType.js). */}
+          <fieldset className="border rounded p-4 flex flex-col gap-4">
+            <legend className="px-1 text-sm font-semibold text-gray-800">GST Registration</legend>
+
+            <div>
+              <label htmlFor="gstScheme" className="block text-sm font-medium text-gray-700 mb-1">
+                GST Scheme
+              </label>
+              <select
+                id="gstScheme"
+                name="gstScheme"
+                value={form.gstScheme}
+                onChange={handleChange}
+                className="w-full border rounded px-3 py-2 bg-white"
+              >
+                {Object.entries(GST_SCHEME_OPTIONS).map(([value, { label }]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <ul className="mt-2 text-xs text-gray-500 flex flex-col gap-1">
+                {Object.entries(GST_SCHEME_OPTIONS).map(([value, { label, help }]) => (
+                  <li key={value} className={value === form.gstScheme ? "text-gray-900 font-medium" : ""}>
+                    <span className="font-semibold">{label}:</span> {help}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-amber-700">
+                Not sure? Your GST registration certificate (or your CA) tells you which scheme you're under.
+              </p>
+            </div>
+
+            {form.gstScheme !== "not_registered" && (
+              <div>
+                <label htmlFor="gstNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                  GSTIN
+                </label>
+                <input
+                  id="gstNumber"
+                  name="gstNumber"
+                  value={form.gstNumber}
+                  onChange={handleChange}
+                  required
+                  maxLength={15}
+                  placeholder="15-character GSTIN, e.g. 05ABCDE1234F1Z5"
+                  className="w-full border rounded px-3 py-2 uppercase"
+                />
+                <p className="text-xs text-gray-400 mt-1">Printed on every bill/invoice.</p>
+              </div>
+            )}
+
+            {form.gstScheme === "regular" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="gstRate" className="block text-sm font-medium text-gray-700 mb-1">
+                    GST Rate included in prices (%)
+                  </label>
+                  <input
+                    id="gstRate"
+                    type="number"
+                    name="gstRate"
+                    value={form.gstRate}
+                    onChange={handleChange}
+                    min="0"
+                    max="40"
+                    step="0.01"
+                    className="w-full border rounded px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="storeState" className="block text-sm font-medium text-gray-700 mb-1">
+                    Store State
+                  </label>
+                  <input
+                    id="storeState"
+                    name="storeState"
+                    value={form.storeState}
+                    onChange={handleChange}
+                    placeholder="e.g. Uttarakhand"
+                    className="w-full border rounded px-3 py-2"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Same-state orders: CGST + SGST. Others: IGST.</p>
+                </div>
+              </div>
+            )}
+          </fieldset>
+
+          {/* Details printed on customer bills - see backend/utils/generateInvoicePDF.js */}
+          <fieldset className="border rounded p-4 flex flex-col gap-4">
+            <legend className="px-1 text-sm font-semibold text-gray-800">Bill Details</legend>
+            <div>
+              <label htmlFor="storeAddress" className="block text-sm font-medium text-gray-700 mb-1">
+                Store Address
+              </label>
+              <textarea
+                id="storeAddress"
+                name="storeAddress"
+                value={form.storeAddress}
+                onChange={handleChange}
+                rows={2}
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label htmlFor="panNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                PAN <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <input
+                id="panNumber"
+                name="panNumber"
+                value={form.panNumber}
+                onChange={handleChange}
+                maxLength={10}
+                placeholder="e.g. ABCDE1234F"
+                className="w-full border rounded px-3 py-2 uppercase placeholder:normal-case"
+              />
+            </div>
+            <div>
+              <label htmlFor="invoiceTerms" className="block text-sm font-medium text-gray-700 mb-1">
+                Terms &amp; Conditions on bills
+              </label>
+              <textarea
+                id="invoiceTerms"
+                name="invoiceTerms"
+                value={form.invoiceTerms}
+                onChange={handleChange}
+                rows={3}
+                className="w-full border rounded px-3 py-2 text-sm"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                One term per line. Keep it to 2-3 short lines so the bill stays one page.
+              </p>
+            </div>
+          </fieldset>
 
           <div className="grid grid-cols-2 gap-4">
             <div>

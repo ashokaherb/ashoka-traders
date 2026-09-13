@@ -28,6 +28,12 @@ const updateSettingsHandler = async (req, res) => {
     minimumOrderValue,
     storeName,
     gstNumber,
+    gstScheme,
+    gstRate,
+    storeState,
+    storeAddress,
+    panNumber,
+    invoiceTerms,
     supportEmail,
     supportPhone,
   } = req.body;
@@ -37,8 +43,20 @@ const updateSettingsHandler = async (req, res) => {
   if (minimumOrderValue !== undefined) settings.minimumOrderValue = minimumOrderValue;
   if (storeName !== undefined) settings.storeName = storeName;
   if (gstNumber !== undefined) settings.gstNumber = gstNumber;
+  if (gstScheme !== undefined) settings.gstScheme = gstScheme; // enum-validated by the model
+  if (gstRate !== undefined) settings.gstRate = gstRate;
+  if (storeState !== undefined) settings.storeState = storeState;
+  if (storeAddress !== undefined) settings.storeAddress = storeAddress;
+  if (panNumber !== undefined) settings.panNumber = panNumber;
+  if (invoiceTerms !== undefined) settings.invoiceTerms = invoiceTerms;
   if (supportEmail !== undefined) settings.supportEmail = supportEmail;
   if (supportPhone !== undefined) settings.supportPhone = supportPhone;
+
+  // A registered scheme without a GSTIN would silently fall back to a plain receipt - make
+  // the admin fix it instead of discovering it on a customer's invoice.
+  if (settings.gstScheme !== "not_registered" && !settings.gstNumber) {
+    return res.status(400).json({ message: "Enter the GSTIN, or set GST Scheme to Not Registered." });
+  }
 
   const updated = await settings.save();
   res.json(updated);

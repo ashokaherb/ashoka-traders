@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { GST_SCHEMES } = require("../utils/invoiceType");
 
 /**
  * Store-wide settings. This is a "singleton" collection - only one document
@@ -23,10 +24,56 @@ const settingsSchema = new mongoose.Schema(
       type: String,
       default: "Ashoka Traders",
     },
-    // Optional - if set, orders get a GST "Tax Invoice"; if blank, a plain receipt instead.
+    // GSTIN. Blank = plain receipt, whatever gstScheme says.
     gstNumber: {
       type: String,
       default: "",
+      trim: true,
+      uppercase: true,
+    },
+    // Decides the order document (see utils/invoiceType.js):
+    //  composition    -> "Bill of Supply", no tax shown (dealer can't collect GST)
+    //  regular        -> "Tax Invoice" with CGST/SGST or IGST breakdown
+    //  not_registered -> plain receipt
+    // Defaults to not_registered so an unset scheme never produces a document showing tax.
+    gstScheme: {
+      type: String,
+      enum: GST_SCHEMES,
+      default: "not_registered",
+    },
+    // Regular scheme only: tax rate (%) included in product prices, and the store's state
+    // (same state as the customer -> CGST + SGST, otherwise IGST). Ignored for composition.
+    gstRate: {
+      type: Number,
+      default: 5,
+      min: 0,
+      max: 40,
+    },
+    storeState: {
+      type: String,
+      default: "Uttarakhand",
+      trim: true,
+    },
+    // Printed in the bill/invoice header.
+    storeAddress: {
+      type: String,
+      default: "3 Dhamawala Bazaar, Dehradun, Uttarakhand",
+      trim: true,
+    },
+    panNumber: {
+      type: String,
+      default: "",
+      trim: true,
+      uppercase: true,
+    },
+    // Short terms printed at the bottom of every bill - one per line, keep it to 2-3 lines.
+    invoiceTerms: {
+      type: String,
+      default: [
+        "Items can be returned or exchanged only if damaged or incorrect - report within 48 hours of delivery.",
+        "Please keep the original packing and this bill for any return or exchange.",
+        "To cancel, contact us before the order is shipped.",
+      ].join("\n"),
     },
     supportEmail: {
       type: String,

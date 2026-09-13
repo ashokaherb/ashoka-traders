@@ -2,6 +2,7 @@ const Product = require("../models/Product");
 const Coupon = require("../models/Coupon");
 const Settings = require("../models/Settings");
 const { getActiveOffers, pickBestOffer, applyDiscount } = require("./offerPricing");
+const { couponProblem, couponDiscount } = require("./couponRules");
 
 /**
  * A validation failure that the order controllers can catch and turn into a
@@ -88,6 +89,7 @@ async function resolveOrderPricing({ items, couponCode }) {
       variantLabel,
       quantity,
       price: unitPrice,
+      hsnCode: product.hsnCode || "",
     });
   }
 
@@ -95,16 +97,10 @@ async function resolveOrderPricing({ items, couponCode }) {
   let discount = 0;
   let appliedCouponCode = null;
   if (couponCode) {
-    const coupon = await Coupon.findOne({ code: couponCode.toUpperCase() });
-    if (!coupon || !coupon.active) {
-      throw new OrderValidationError("Invalid or inactive coupon code");
-    }
-    if (coupon.expiryDate && coupon.expiryDate < new Date()) {
-      throw new OrderValidationError("This coupon has expired");
-    }
-    discount =
-      coupon.discountType === "percent" ? (subtotal * coupon.value) / 100 : coupon.value;
-    discount = Math.min(discount, subtotal); // never let discount push the total negative
+    const coupon = await Coupon.findOne({ code: String(couponCode).trim().toUpperCase() });
+    const problem = couponProblem(coupon, subtotal);
+    if (problem) throw new OrderValidationError(problem);
+    discount = couponDiscount(coupon, subtotal);
     appliedCouponCode = coupon.code;
   }
 
