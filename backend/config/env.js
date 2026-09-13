@@ -3,7 +3,7 @@
  * checking process.env.NODE_ENV directly, so every file agrees on what "production" means.
  * (Audit finding M12.)
  *
- *   NODE_ENV=production   on the live server (Railway variables) - hides error details
+ *   NODE_ENV=production   on the live server (Render environment variables) - hides error details
  *                         from API responses, quieter request logs, proxy-aware IPs
  *   unset / development   locally - detailed errors and full request logs for debugging
  */
@@ -11,11 +11,13 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 const isProduction = NODE_ENV === "production";
 
 /**
- * How many reverse proxies sit in front of the app. Railway/Render/Heroku put exactly one
- * in front, so in production the real visitor IP is the last hop in X-Forwarded-For.
- * This matters for rate limiting: without it, EVERY visitor looks like the proxy's single
- * IP, and one person's failed logins would lock out all customers at once.
- * Override with TRUST_PROXY (e.g. 2 behind Cloudflare + Railway, 0 with no proxy).
+ * How many reverse proxies sit in front of the app. On Render, requests reach the app through
+ * one proxy hop that adds the visitor's IP to X-Forwarded-For, so production defaults to 1.
+ * This matters for rate limiting: set too LOW, every visitor looks like the proxy's IP and
+ * one person's failed logins lock out all customers; set too HIGH, attackers can fake their
+ * IP in the header and dodge the limits. Render doesn't publish an exact hop count, so
+ * confirm it once after deploying (DEPLOYMENT.md, "Verify TRUST_PROXY") and override with
+ * TRUST_PROXY only if that check says so. 0 = no proxy (local development).
  */
 const TRUST_PROXY = process.env.TRUST_PROXY !== undefined ? Number(process.env.TRUST_PROXY) : isProduction ? 1 : 0;
 

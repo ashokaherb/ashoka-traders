@@ -37,8 +37,8 @@ connectDB();
 
 const app = express();
 
-// Behind Railway's proxy, read the real visitor IP from X-Forwarded-For - rate limits
-// depend on it (see TRUST_PROXY in config/env.js).
+// Behind Render's proxy, read the real visitor IP from X-Forwarded-For - rate limits
+// depend on it (see TRUST_PROXY in config/env.js, and /api/debug/ip below to verify it).
 app.set("trust proxy", TRUST_PROXY);
 app.disable("x-powered-by"); // don't advertise "Express" (helmet also removes it)
 
@@ -46,7 +46,7 @@ app.disable("x-powered-by"); // don't advertise "Express" (helmet also removes i
 // This server only returns JSON (plus the sitemap XML and invoice PDFs), never web pages,
 // so its Content-Security-Policy can be locked right down: nothing may load, run, or frame
 // an API response. The CSP that protects the actual shop pages is set where those pages
-// are hosted - see storefront/vite.config.js / admin/vite.config.js (Netlify _headers).
+// are hosted - see storefront/securityHeaders.js / admin/securityHeaders.js (Vercel vercel.json).
 // helmet also sets HSTS (HTTPS only, 1 year), X-Content-Type-Options: nosniff,
 // X-Frame-Options, Referrer-Policy and friends.
 app.use(
@@ -99,10 +99,24 @@ app.get("/", (req, res) => {
   res.json({ message: "Ashoka Traders API is running" });
 });
 
-// Simple health check for uptime monitors / hosting platforms (e.g. Railway, a load balancer).
+// Simple health check for uptime monitors / hosting platforms (Render's Health Check Path).
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
+
+// TEMPORARY proxy check - confirms TRUST_PROXY is right on the live host, so rate limits see
+// each visitor's real IP (DEPLOYMENT.md, "Verify TRUST_PROXY"). The route only exists while
+// DEBUG_IP_ENDPOINT=true: turn it on, run the check, then delete the variable again.
+if (process.env.DEBUG_IP_ENDPOINT === "true") {
+  console.warn("[config warning] DEBUG_IP_ENDPOINT is on - remove it once TRUST_PROXY is verified");
+  app.get("/api/debug/ip", (req, res) => {
+    res.json({
+      ip: req.ip, // the IP the rate limiter will use for this visitor
+      trustProxy: TRUST_PROXY,
+      xForwardedFor: req.headers["x-forwarded-for"] || null,
+    });
+  });
+}
 
 app.use("/sitemap.xml", sitemapRoutes);
 
@@ -149,7 +163,7 @@ process.on("unhandledRejection", (reason) => {
 // state - Node's own guidance is to log and restart. We keep it alive deliberately:
 // for a single-instance shop, staying up with one failed request beats every customer
 // getting a connection error. If you later run under a process manager that restarts
-// cleanly (PM2, Railway), consider exiting here instead.
+// cleanly (PM2, Render), consider exiting here instead.
 process.on("uncaughtException", (error) => {
   console.error("UNCAUGHT EXCEPTION (server kept alive - fix the source):", error);
 });

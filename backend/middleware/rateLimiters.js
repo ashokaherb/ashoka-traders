@@ -8,7 +8,7 @@ const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
  * restarts, and would need a shared store (e.g. Redis) if you ever run several instances.
  *
  * Each IP is identified via req.ip, which is only the real visitor IP if "trust proxy" is
- * set correctly behind Railway's proxy - see TRUST_PROXY in config/env.js.
+ * set correctly behind Render's proxy - see TRUST_PROXY in config/env.js.
  */
 
 const minutesUntil = (resetTime) => Math.max(1, Math.ceil((resetTime - Date.now()) / 60000));

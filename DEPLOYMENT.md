@@ -4,15 +4,14 @@ This guide walks through taking Ashoka Traders from your local machine to a live
 publicly-reachable site. There are three separate deployables:
 
 ```
-/backend      -> a long-running Node.js server (needs a host that keeps a process alive)
-/storefront   -> a static build (HTML/CSS/JS) - can be hosted almost anywhere
-/admin        -> a static build (HTML/CSS/JS) - can be hosted almost anywhere
+/backend      -> a long-running Node.js server   -> Render (Web Service)
+/storefront   -> a static Vite build              -> Vercel (project 1)
+/admin        -> a static Vite build              -> Vercel (project 2)
 ```
 
-The instructions below use **Railway** for the backend and **Netlify** for the two static
-frontends as concrete examples, since both have generous free tiers and a simple CLI/UI -
-but the steps translate directly to Render, Fly.io, a plain VPS (DigitalOcean/Linode/AWS
-EC2), Vercel, or Cloudflare Pages if you'd rather use one of those instead.
+Deploy them in this order - each step needs a URL from the one before:
+**MongoDB Atlas -> backend on Render -> storefront + admin on Vercel -> point the backend's
+CORS at the Vercel URLs.**
 
 ---
 
@@ -20,159 +19,258 @@ EC2), Vercel, or Cloudflare Pages if you'd rather use one of those instead.
 
 1. Create a free account at [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas)
    if you don't already have one from local dev.
-2. Create a **new cluster** dedicated to production - don't reuse the same database you've
-   been developing against, so test data/orders never mix with real customer data.
+2. Create a **new cluster** dedicated to production - don't reuse the database you've been
+   developing against, so test data/orders never mix with real customer data.
 3. **Database Access** -> add a database user with a strong, generated password (not the
    one from your dev `.env`).
-4. **Network Access** -> add an IP allowlist entry. For most hosts (Railway, Render, etc.)
-   that don't publish fixed IPs, allow `0.0.0.0/0` (anywhere) - Atlas still requires the
-   correct username/password/connection string, so this isn't as open as it sounds, but if
-   your host does offer static outbound IPs, allowlist those specifically instead.
+4. **Network Access** -> allowlist your Render service's **outbound IP ranges**. You'll get
+   these in step 2.6 below (Render dashboard -> your service -> **Connect** -> **Outbound**).
+   Until the backend exists, you can temporarily allow `0.0.0.0/0` - Atlas still requires
+   the username/password/connection string - but replace it with Render's ranges once you
+   have them. (This is the same allowlist that blocked your laptop when its IP changed.)
 5. **Connect** -> "Drivers" -> copy the `mongodb+srv://...` connection string. This becomes
    your production `MONGO_URI`.
 
 ---
 
-## 2. Backend deployment (Railway example)
+## 2. Backend on Render
 
-1. Push this repo to GitHub if it isn't already there (Railway deploys from a Git repo).
-2. At [railway.app](https://railway.app), **New Project -> Deploy from GitHub repo**, and
-   point it at this repository with **Root Directory** set to `backend`.
-3. Railway auto-detects Node.js and will run `npm install` then `npm start` (already
-   defined in `backend/package.json`) - no build step needed for the backend.
-4. Under the service's **Variables** tab, add every variable from `backend/.env.example`,
-   filled in with real production values (see the checklist in README.md) - Railway
-   injects these as environment variables, you don't upload a `.env` file.
-   **Set `NODE_ENV=production`** - this hides internal error details from API responses,
-   switches to production logging, and makes the server refuse to start with a weak
-   `JWT_SECRET` or missing `STOREFRONT_URL`/`ADMIN_URL`. Leave `TRUST_PROXY` unset (it
-   defaults to 1, correct for Railway's single proxy); if you later put Cloudflare in front
-   of Railway, set it to `2` or rate limits will see Cloudflare's IP instead of visitors'.
-5. Railway assigns a public URL like `https://your-app.up.railway.app` - this is your
-   backend's address. Under **Settings -> Networking**, you can attach a custom domain
-   here too (e.g. `api.yourdomain.com`) once you're ready (see step 5 below).
-6. Once deployed, verify it's healthy:
-   ```bash
-   curl https://your-backend-domain/api/health
-   # {"status":"ok","uptime":...,"timestamp":"..."}
-   ```
-7. Run the one-time seed scripts against production **once**, from your local machine with
-   your production `.env` temporarily in place (or via Railway's "Run a command" /
-   one-off shell feature, if available on your plan):
-   ```bash
-   npm run seed:admin      # creates the one admin account
-   npm run seed:phase2     # default shipping settings + a starter coupon
-   npm run migrate:slugs   # only needed if importing products from an earlier phase
-   ```
+### 2.1 Create the service
 
-**VPS alternative** (DigitalOcean/Linode/a bare EC2 instance): install Node.js 18+, clone
-the repo, `cd backend && npm install --production`, copy your production `.env` onto the
-server (never commit it), and run it under a process manager so it survives reboots and
-crashes:
+1. Make sure the latest code is pushed to GitHub (Render deploys from the repo).
+2. At [render.com](https://render.com): **New -> Web Service** -> connect your GitHub account
+   -> pick the `ashoka-traders` repository.
+3. Settings:
+   | Field | Value |
+   |---|---|
+   | Root Directory | `backend` |
+   | Runtime | Node |
+   | Build Command | `npm install` |
+   | Start Command | `npm start` |
+   | Health Check Path | `/api/health` (under **Advanced**) |
+   | Instance type | **Starter or above for the live shop** - see the note below |
+
+   `npm install` works on Render because `backend/.npmrc` sets `legacy-peer-deps=true`
+   (needed for the Cloudinary upload package). Don't delete that file - without it the
+   build fails with an `ERESOLVE` error.
+
+> **Why not the Free instance for the real shop?** Render's free web services
+> [spin down after 15 minutes without traffic](https://render.com/docs/free) and take about a
+> minute to wake up - the first customer after a quiet spell would see the storefront fail to
+> load products or log in until it wakes. Spinning down also resets the in-memory rate-limit
+> counters. Free is fine for a test deployment; use a paid instance once real customers arrive.
+
+### 2.2 Environment variables
+
+Under **Environment**, add every variable from `backend/.env.example`, filled in with real
+production values (see the pre-launch checklist in `README.md`). Render injects these as
+environment variables - you never upload a `.env` file. In particular:
+
+- **`NODE_ENV=production`** - hides internal error details from API responses, switches to
+  production logging, and makes the server refuse to start with a weak `JWT_SECRET` or
+  missing `STOREFRONT_URL`/`ADMIN_URL`. (For the very first deploy, before the Vercel URLs
+  exist, put temporary values like `https://placeholder.vercel.app` in those two, then fix
+  them in step 4.)
+- **`TRUST_PROXY`** - leave it **unset**. It defaults to `1` in production, which matches
+  Render's proxy. You'll confirm this in 2.5.
+- Don't add `PORT` - Render sets it automatically, and `server.js` already reads it.
+
+### 2.3 Deploy and check it's healthy
+
+Render builds and starts the service, and gives it a URL like
+`https://ashoka-traders-api.onrender.com`. Check:
+
 ```bash
-npm install -g pm2
-pm2 start server.js --name ashoka-backend
-pm2 save
-pm2 startup   # follow its printed instructions to enable on-boot startup
+curl https://YOUR-SERVICE.onrender.com/api/health
+# {"status":"ok","uptime":...,"timestamp":"..."}
 ```
-Put Nginx (or Caddy) in front of it as a reverse proxy for HTTPS - a VPS gives you no free
-TLS certificate on its own, so use [Certbot](https://certbot.eff.org/) (Let's Encrypt) with
-Nginx, or Caddy's automatic HTTPS.
 
----
+In the **Logs** tab you should see `Server running on ... (production mode)` and
+`MongoDB connected`. `[config warning]` lines point at settings that still need real values
+(e.g. Razorpay test keys, missing SMTP).
 
-## 3. Storefront + Admin deployment (Netlify example)
+### 2.4 Seed the admin account (once)
 
-Both are plain Vite static builds - the steps are identical for each, just done twice
-(once per app, as two separate Netlify sites).
+Free instances have no shell, so run the seed scripts **from your own machine** with the
+production values temporarily in `backend/.env` (at minimum `MONGO_URI` and `ADMIN_EMAIL`,
+with `ADMIN_PASSWORD` left blank):
 
-1. At [netlify.com](https://netlify.com), **Add new site -> Import an existing project**,
-   pick this repository.
-2. For the **storefront** site:
-   - Base directory: `storefront`
-   - Build command: `npm run build`
-   - Publish directory: `storefront/dist`
-   - Environment variables (Netlify -> Site configuration -> Environment variables):
-     `VITE_API_URL` (your deployed backend's URL + `/api`, e.g.
-     `https://api.yourdomain.com/api`) and `VITE_GA_MEASUREMENT_ID`.
-3. Repeat for the **admin** site with base directory `admin`, publish directory
-   `admin/dist`, and just `VITE_API_URL` (no GA variable - analytics is storefront-only).
-4. Since these are client-side-routed React apps (React Router), add a redirect rule so
-   refreshing a deep link (e.g. `/product/basmati-rice`) doesn't 404. Create a file
-   `storefront/public/_redirects` (and the same for `admin/public/_redirects`) containing:
-   ```
-   /*    /index.html   200
-   ```
-   Netlify picks this up automatically on the next deploy.
-
-   **Security headers are automatic:** every `npm run build` also writes `dist/_headers`
-   (Content-Security-Policy and friends - see `buildCsp` in each app's `vite.config.js`),
-   built from that site's `VITE_API_URL`. If you add a third-party service later (chat
-   widget, another analytics tool, images from a new host), add its domain there, or the
-   browser will block it.
-5. Once deployed, **update your backend's `.env`** (`STOREFRONT_URL` and `ADMIN_URL`) to
-   the real Netlify URLs (or your custom domains, once attached) and redeploy the
-   backend - CORS blocks requests from any origin not in that allowlist, so this step is
-   required before login/checkout will work from the live sites.
-
-**Alternative: serve the frontends from the backend itself** (simplest single-host setup,
-no separate static hosting needed): build both apps (`npm run build` in each), then in
-`backend/server.js` add something like:
-```js
-app.use("/", express.static(path.join(__dirname, "../storefront/dist")));
-app.use("/admin", express.static(path.join(__dirname, "../admin/dist")));
+```bash
+cd backend
+npm run seed:admin      # creates the admin and prints a random password ONCE - save it
+npm run seed:phase2     # default shipping settings + a starter coupon
 ```
-This avoids CORS entirely (same origin) but means redeploying the backend every time a
-frontend changes, and the admin panel being reachable at a guessable `/admin` path on your
-main domain - a separate subdomain (see below) is generally the cleaner choice.
+
+Then put your local development values back in `backend/.env`. (On a paid instance you can
+run the same commands in Render's **Shell** tab instead.)
+
+### 2.5 Verify TRUST_PROXY (rate limiting sees real visitor IPs)
+
+The login, register, coupon and contact-form rate limits count attempts **per visitor IP**.
+If `TRUST_PROXY` is wrong for Render, either every visitor appears to share Render's proxy
+IP (one person's failed logins lock out all your customers), or visitors can fake their IP
+in a header and dodge the limits. Render doesn't publish its exact proxy hop count, so check
+it once on the live service - it takes two minutes:
+
+1. Render -> **Environment** -> add `DEBUG_IP_ENDPOINT` = `true` -> save (it redeploys).
+2. Find your real public IP: open <https://api.ipify.org> in your browser.
+3. Run both of these from the same computer:
+   ```bash
+   curl https://YOUR-SERVICE.onrender.com/api/debug/ip
+   curl -H "X-Forwarded-For: 6.6.6.6" https://YOUR-SERVICE.onrender.com/api/debug/ip
+   ```
+4. Read the `"ip"` field in **both** responses:
+   | What you see | Meaning | Fix |
+   |---|---|---|
+   | Your real IP both times | Correct | Nothing - leave `TRUST_PROXY` unset |
+   | A Render/Cloudflare address, not yours | Too few proxies trusted - all visitors would share one IP | Set `TRUST_PROXY=2`, redeploy, re-check |
+   | `6.6.6.6` in the second response | Too many trusted - IPs can be faked | Set `TRUST_PROXY` one lower, redeploy, re-check |
+5. **Delete `DEBUG_IP_ENDPOINT`** afterwards and redeploy. (While it's on, the logs show a
+   `DEBUG_IP_ENDPOINT is on` warning as a reminder.)
+
+### 2.6 Outbound IPs (Atlas + Brevo)
+
+Render dashboard -> your service -> **Connect** (top right) -> **Outbound** tab lists the IP
+ranges your backend's outgoing connections come from. These ranges are
+[shared by all services in the same region](https://render.com/docs/outbound-ip-addresses).
+Add them to:
+
+- **MongoDB Atlas** -> Network Access (and remove any temporary `0.0.0.0/0`)
+- **Brevo** -> Security -> **Authorised IPs** - otherwise order emails fail with
+  `525 Unauthorized IP address`, exactly like they did from your laptop. (Brevo accepts
+  individual IPs; if a range is too large to enter, you can turn Brevo's IP blocking off
+  and rely on the SMTP key, or buy dedicated outbound IPs on Render.)
 
 ---
 
-## 4. Connecting your custom domain
+## 3. Storefront + Admin on Vercel
 
-Once you have a real domain (e.g. from Namecheap, GoDaddy, Google Domains, etc.), a common
-layout is:
+Both are plain Vite static builds - set up **two separate Vercel projects** from the same
+repository, one per folder.
 
-| Subdomain              | Points to         |
-|-------------------------|--------------------|
-| `yourdomain.com` / `www` | Storefront (Netlify) |
-| `admin.yourdomain.com`  | Admin panel (Netlify) |
-| `api.yourdomain.com`    | Backend (Railway)  |
+### 3.1 Generate each app's vercel.json (on your computer, before deploying)
 
-For each: in your DNS provider, add the CNAME (or A record, per that host's instructions)
-your hosting platform tells you to add, then add the custom domain in that platform's
-dashboard (Railway's Networking tab / Netlify's Domain settings) and wait for it to verify
-and issue an HTTPS certificate (usually automatic and free on both platforms).
+Each app's `vercel.json` carries its security headers (Content-Security-Policy etc.) and the
+single-page-app rewrite. It's generated from that app's `securityHeaders.js`, because the
+CSP must list your real backend address. With your Render URL from step 2.3:
 
-After domains are live, update every `.env` that references a URL to the real domains
-instead of `localhost`/the platform-assigned URLs:
-- `backend/.env`: `STOREFRONT_URL`, `ADMIN_URL`, `BACKEND_PUBLIC_URL`
-- `storefront/.env` (on Netlify): `VITE_API_URL`
-- `admin/.env` (on Netlify): `VITE_API_URL`
+```bash
+cd storefront && npm run vercel:config -- https://YOUR-SERVICE.onrender.com/api
+cd ../admin   && npm run vercel:config -- https://YOUR-SERVICE.onrender.com/api
+cd .. && git add storefront/vercel.json admin/vercel.json && git commit -m "Point CSP at production API" && git push
+```
 
-And redeploy all three so the changes take effect.
+The committed files start out pointing at a placeholder (`your-backend.onrender.com`), so
+**skipping this step makes the Vercel build fail** with a message telling you to run it -
+on purpose: a CSP with the wrong backend address would make the browser block every API
+call and the site wouldn't work at all.
 
-**About `/sitemap.xml`**: it's served by the backend (e.g.
-`api.yourdomain.com/sitemap.xml`), but search engines expect it at your storefront's own
-domain root (`yourdomain.com/sitemap.xml`). Either:
-- add a redirect/rewrite rule at your storefront's host (Netlify supports this via
-  `storefront/public/_redirects`: `/sitemap.xml https://api.yourdomain.com/sitemap.xml 200`), or
-- submit `api.yourdomain.com/sitemap.xml` directly in Google Search Console - it accepts a
-  sitemap on a different subdomain as long as you verify ownership of that subdomain too.
+**Re-run it and commit whenever the backend URL changes** (e.g. you attach
+`api.yourdomain.com`), or after editing `securityHeaders.js` (e.g. to allow a new
+third-party service).
+
+### 3.2 Create the two projects
+
+At [vercel.com](https://vercel.com): **Add New -> Project** -> import the `ashoka-traders`
+repository. Do this twice:
+
+| Setting | Storefront project | Admin project |
+|---|---|---|
+| Root Directory | `storefront` | `admin` |
+| Framework Preset | Vite (auto-detected) | Vite (auto-detected) |
+| Build Command / Output | defaults (`npm run build` -> `dist`) | defaults |
+| Environment Variables | `VITE_API_URL` = `https://YOUR-SERVICE.onrender.com/api`, `VITE_GA_MEASUREMENT_ID` | `VITE_API_URL` = same value |
+
+`VITE_API_URL` must be **exactly** the URL you passed to `npm run vercel:config` - the build
+checks that the two match.
+
+Vercel gives each project a URL like `https://ashoka-traders.vercel.app` and
+`https://ashoka-traders-admin.vercel.app`.
+
+### 3.3 Verify the security headers are live
+
+Vercel applies `vercel.json` at its edge, so check the real deployment, not just your
+local build:
+
+1. **Headers are sent** - for each site (use a deep link, which also tests the rewrite):
+   ```bash
+   curl -sI https://YOUR-STOREFRONT.vercel.app/product/any-slug | grep -iE "^HTTP|content-security-policy|x-frame-options|x-content-type"
+   curl -sI https://YOUR-ADMIN.vercel.app/orders | grep -iE "^HTTP|content-security-policy|x-robots-tag"
+   ```
+   Expect `HTTP/2 200` (not 404) and a `content-security-policy` whose `connect-src` includes
+   your `onrender.com` address. The admin should also show `x-robots-tag: noindex`.
+2. **Nothing legitimate is blocked** - open the live storefront in Chrome with DevTools ->
+   **Console** open, and go through: home page (banner + category images), a product page,
+   log in, add to cart, checkout, choose **Pay Online** so the Razorpay popup opens. There
+   should be **no red "Refused to ... because it violates the following Content Security
+   Policy directive"** messages coming from your own site. (Messages that appear *inside*
+   Razorpay's popup, from addresses like `px-cloud.net`, are Razorpay enforcing its own
+   policy - not yours - and don't affect payments.) Repeat for the admin panel: log in,
+   open Products, edit a product, Banners, Categories.
+3. **Optional second opinion** - paste each site's URL into
+   <https://securityheaders.com>; it should grade the CSP and other headers as present.
+
+If the browser does block something legitimate, add its domain to the right list in that
+app's `securityHeaders.js`, re-run `npm run vercel:config`, commit, and push.
 
 ---
 
-## 5. Post-deploy checklist
+## 4. Point the backend at the live sites
 
-- [ ] `curl https://api.yourdomain.com/api/health` returns `{"status":"ok",...}`
-- [ ] Storefront loads, you can register/log in, browse, add to cart
-- [ ] A test order goes through (use a small real payment via Razorpay, or COD, to confirm
-      the full path end-to-end before announcing the site is live)
+Back in Render -> **Environment**, set:
+
+- `STOREFRONT_URL` = your storefront's Vercel URL (no trailing slash)
+- `ADMIN_URL` = your admin panel's Vercel URL
+
+and redeploy. CORS blocks requests from any origin not in that list, so login and checkout
+won't work from the live sites until this is done.
+
+---
+
+## 5. Connecting your custom domain
+
+Once you have a real domain (e.g. from Namecheap or GoDaddy), a common layout is:
+
+| Subdomain | Points to |
+|---|---|
+| `yourdomain.com` / `www` | Storefront (Vercel) |
+| `admin.yourdomain.com` | Admin panel (Vercel) |
+| `api.yourdomain.com` | Backend (Render) |
+
+For each: add the domain in that platform's dashboard (Vercel: Project -> **Settings ->
+Domains**; Render: service -> **Settings -> Custom Domains**), then add the DNS record it
+tells you to at your domain registrar. Both issue HTTPS certificates automatically.
+
+After domains are live, update every URL setting and redeploy:
+- Render: `STOREFRONT_URL`, `ADMIN_URL`, `BACKEND_PUBLIC_URL`
+- Both Vercel projects: `VITE_API_URL` = `https://api.yourdomain.com/api`
+- **Both `vercel.json` files:** `npm run vercel:config -- https://api.yourdomain.com/api` in
+  each app, commit, push (the Vercel build refuses to deploy until you do)
+
+**About `/sitemap.xml`**: it's served by the backend (`api.yourdomain.com/sitemap.xml`), but
+search engines expect it at your storefront's own domain. Either submit
+`api.yourdomain.com/sitemap.xml` directly in Google Search Console (it accepts a sitemap on
+a subdomain you've verified), or add a rewrite to `buildVercelConfig` in
+`storefront/securityHeaders.js` **before** the catch-all one -
+`{ source: "/sitemap.xml", destination: "https://api.yourdomain.com/sitemap.xml" }` - then
+re-run `npm run vercel:config` and commit.
+
+---
+
+## 6. Post-deploy checklist
+
+- [ ] `curl https://YOUR-API/api/health` returns `{"status":"ok",...}`
+- [ ] Render logs show `(production mode)` and no unexpected `[config warning]` lines
+- [ ] `TRUST_PROXY` verified with `/api/debug/ip` (2.5), and `DEBUG_IP_ENDPOINT` removed again
+- [ ] Render outbound IPs added to Atlas and Brevo (2.6)
+- [ ] Security headers verified on both Vercel sites, no CSP errors in the console (3.3)
+- [ ] Storefront: register/log in, browse, add to cart, deep links like `/product/...` load on refresh
+- [ ] A test order goes through end-to-end (a small real Razorpay payment, or COD)
 - [ ] Order confirmation + admin alert emails actually arrive (not just console logs)
-- [ ] Admin panel loads at its own domain, login works, Dashboard shows real data
-- [ ] `https://yourdomain.com/sitemap.xml` (or wherever you routed it) returns valid XML
-- [ ] Google Analytics Realtime report shows activity as you browse the live site
-- [ ] HTTPS padlock shows on all three domains (no mixed-content warnings)
+- [ ] Admin panel loads, login works, Dashboard shows real data
+- [ ] `sitemap.xml` reachable wherever you routed it
+- [ ] Google Analytics Realtime shows activity as you browse (and no CSP errors for GA)
+- [ ] HTTPS padlock on all three domains (no mixed-content warnings)
 
 See the **Pre-launch checklist** at the bottom of `README.md` for every environment
 variable/setting that still needs a real value before this point.

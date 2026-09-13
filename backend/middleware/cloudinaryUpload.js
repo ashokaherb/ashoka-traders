@@ -3,7 +3,7 @@ const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../config/cloudinary");
 
 // Multer's storage engine uploads straight to Cloudinary as each file arrives -
-// nothing ever touches this server's disk, which matters on hosts like Railway
+// nothing ever touches this server's disk, which matters on hosts like Render
 // where the filesystem is wiped on every redeploy.
 const storage = new CloudinaryStorage({
   cloudinary,
