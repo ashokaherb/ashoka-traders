@@ -66,7 +66,7 @@ export default function MainHeaderRow({ settings, onToggleMenu, menuOpen }) {
 
         {/* Logo + brand name */}
         <Link to="/" className="flex items-center gap-2 shrink-0">
-          <img src={logo} alt="" className="w-9 h-9 sm:w-11 sm:h-11" />
+          <img src={logo} alt="" className="w-12 h-12 sm:w-16 sm:h-16 object-contain" />
           <span className="leading-tight">
             <span className="block text-lg sm:text-2xl font-bold text-brand-700 tracking-tight">
               {storeName}

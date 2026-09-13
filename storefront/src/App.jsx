@@ -28,7 +28,7 @@ export default function App() {
       {/* Site-wide default title/description - individual pages override these with
           their own <Helmet> (react-helmet-async merges, most specific wins). */}
       <Helmet>
-        <title>Ashoka Traders - Shop quality products online</title>
+        <title>Ashoka Traders — Natural Herbs &amp; Dry Fruits</title>
         <meta
           name="description"
           content="Ashoka Traders - your local shop for premium dry fruits, herbs and everyday essentials, now online. Fast delivery, cash on delivery available."

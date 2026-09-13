@@ -56,7 +56,7 @@ export default function Home() {
   return (
     <div className="bg-cream min-h-screen">
       <Helmet>
-        <title>{storeName} - Shop quality products online</title>
+        <title>{`${storeName} — Natural Herbs & Dry Fruits`}</title>
         <meta
           name="description"
           content={`${storeName} - premium dry fruits, herbs and everyday essentials delivered across India. Cash on delivery available.`}
