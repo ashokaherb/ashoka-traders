@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
+import { getCloudinaryThumbnail } from "../utils/cloudinary";
 
 export default function Cart() {
   const { items, updateQuantity, removeItem, subtotal } = useCart();
@@ -35,7 +36,7 @@ export default function Cart() {
         {items.map((item) => (
           <div key={`${item.productId}-${item.variantId || "base"}`} className="flex items-center gap-4 p-4">
             <img
-              src={item.image || "https://placehold.co/80x80?text=No+Image"}
+              src={getCloudinaryThumbnail(item.image, 160) || "https://placehold.co/80x80?text=No+Image"}
               alt={item.name}
               loading="lazy"
               className="w-16 h-16 object-cover rounded"

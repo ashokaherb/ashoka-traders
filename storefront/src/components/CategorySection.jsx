@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import SectionHeading from "./SectionHeading";
+import { getCloudinaryThumbnail } from "../utils/cloudinary";
 
 /**
  * "Shop by Category" - a horizontally scrollable strip on mobile that becomes a
@@ -34,7 +35,7 @@ export default function CategorySection({ categories, loading }) {
               <div className="aspect-square rounded-2xl overflow-hidden bg-brand-50 border border-cream-dark group-hover:border-brand-300 group-hover:shadow-md transition-all">
                 {category.image ? (
                   <img
-                    src={category.image}
+                    src={getCloudinaryThumbnail(category.image, 360)} // tiles are 112-180px wide
                     alt={category.name}
                     loading="lazy"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

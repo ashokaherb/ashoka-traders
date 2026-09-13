@@ -4,6 +4,7 @@ import { useCart } from "../context/CartContext";
 import WishlistButton from "./WishlistButton";
 import StarRating from "./StarRating";
 import { Cart } from "./icons";
+import { getCloudinaryThumbnail } from "../utils/cloudinary";
 
 /**
  * Product card used by the homepage grid, Shop, Related Products and the Wishlist.
@@ -88,7 +89,8 @@ export default function ProductCard({ product, showBestSellerBadge = false }) {
       {/* Image + overlay controls */}
       <div className="relative bg-cream/50 rounded-t-xl overflow-hidden">
         <img
-          src={image}
+          // Cards render ~150-300px wide; 400px keeps them sharp on retina without the 1000px original.
+          src={getCloudinaryThumbnail(image, 400)}
           alt={product.name}
           loading="lazy"
           className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-300"

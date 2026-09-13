@@ -92,12 +92,13 @@ export default function OrderDetail() {
           <h2 className="font-semibold text-gray-700 mb-1">Items</h2>
           <div className="text-sm mb-4">
             {order.items.map((item, idx) => (
-              <div key={idx} className="flex justify-between py-0.5 text-gray-600">
-                <span>
+              <div key={idx} className="flex justify-between gap-3 py-0.5 text-gray-600">
+                <span className="min-w-0">
                   {item.name}
                   {item.variantLabel ? ` (${item.variantLabel})` : ""} x{item.quantity}
                 </span>
-                <span>₹{item.price * item.quantity}</span>
+                {/* Price never wraps - a long product name wraps beside it instead */}
+                <span className="shrink-0 whitespace-nowrap">₹{item.price * item.quantity}</span>
               </div>
             ))}
           </div>

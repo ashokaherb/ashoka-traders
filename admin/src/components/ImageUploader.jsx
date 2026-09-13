@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import api from "../api/axios";
+import { getCloudinaryThumbnail } from "../utils/cloudinary";
 
 /**
  * Drag-and-drop / click-to-browse product image picker.
@@ -143,7 +144,7 @@ export default function ImageUploader({ images, onImagesChange }) {
                 className="relative w-20 h-20 rounded border border-gray-200 overflow-hidden bg-gray-50 cursor-move"
                 title="Drag to reorder"
               >
-                <img src={url} alt="" className="w-full h-full object-cover" />
+                <img src={getCloudinaryThumbnail(url, 160)} alt="" className="w-full h-full object-cover" />
                 {index === 0 && (
                   <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5">
                     Primary

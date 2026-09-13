@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import api from "../api/axios";
+import { getCloudinaryThumbnail } from "../utils/cloudinary";
 
 /**
  * Single-image drag-and-drop / click-to-browse picker - the same Cloudinary upload
@@ -59,7 +60,7 @@ export default function SingleImageUploader({ value, onChange }) {
   if (value) {
     return (
       <div className="flex items-center gap-3">
-        <img src={value} alt="" className="w-16 h-16 rounded object-cover border border-gray-200" />
+        <img src={getCloudinaryThumbnail(value, 128)} alt="" className="w-16 h-16 rounded object-cover border border-gray-200" />
         <button
           type="button"
           onClick={() => onChange("")}

@@ -1,3 +1,19 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Global safety net against horizontal page overflow - same as the storefront's index.css.
+   Customer-supplied text (names, addresses, product names/descriptions) can contain long
+   unbroken strings; without this one such string makes the whole admin page scroll
+   sideways. Long words wrap instead, and anything still too wide is clipped rather than
+   widening the page. Still fix the specific element when one is found. */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+body {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}

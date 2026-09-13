@@ -58,9 +58,9 @@ export default function Dashboard() {
             ) : (
               <ul className="text-sm divide-y">
                 {stats.topProducts.map((p) => (
-                  <li key={p._id} className="flex justify-between py-2">
-                    <span>{p.name}</span>
-                    <span className="font-medium">{p.totalQuantity} sold</span>
+                  <li key={p._id} className="flex justify-between gap-3 py-2">
+                    <span className="min-w-0">{p.name}</span>
+                    <span className="font-medium shrink-0 whitespace-nowrap">{p.totalQuantity} sold</span>
                   </li>
                 ))}
               </ul>
@@ -81,9 +81,9 @@ export default function Dashboard() {
             ) : (
               <ul className="text-sm divide-y">
                 {stats.lowStockProducts.map((p) => (
-                  <li key={p._id} className="flex justify-between py-2">
-                    <span>{p.name}</span>
-                    <span className="text-red-500 font-medium">
+                  <li key={p._id} className="flex justify-between gap-3 py-2">
+                    <span className="min-w-0">{p.name}</span>
+                    <span className="text-red-500 font-medium text-right shrink-0 max-w-[50%]">
                       {p.variants?.length > 0
                         ? p.variants
                             .filter((v) => v.stock <= p.lowStockThreshold)
@@ -104,12 +104,12 @@ export default function Dashboard() {
             ) : (
               <ul className="text-sm divide-y">
                 {stats.recentOrders.map((o) => (
-                  <li key={o._id} className="flex justify-between py-2">
-                    <Link to={`/orders/${o._id}`} className="text-emerald-700 hover:underline">
+                  <li key={o._id} className="flex justify-between gap-3 py-2">
+                    <Link to={`/orders/${o._id}`} className="text-emerald-700 hover:underline shrink-0">
                       #{o._id.slice(-8).toUpperCase()}
                     </Link>
-                    <span>{o.user?.name}</span>
-                    <span className="font-medium">₹{o.total}</span>
+                    <span className="min-w-0 flex-1 text-center">{o.user?.name}</span>
+                    <span className="font-medium shrink-0 whitespace-nowrap">₹{o.total}</span>
                   </li>
                 ))}
               </ul>

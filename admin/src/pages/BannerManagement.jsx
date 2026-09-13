@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/axios";
+import { getCloudinaryThumbnail } from "../utils/cloudinary";
 import SingleImageUploader from "../components/SingleImageUploader";
 
 // Homepage banner-carousel management (see storefront/src/components/BannerCarousel.jsx).
@@ -123,18 +124,18 @@ export default function BannerManagement() {
           </p>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input
             placeholder="Overlay title (optional)"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="border rounded px-3 py-2 flex-1"
+            className="border rounded px-3 py-2 flex-1 min-w-0"
           />
           <input
             placeholder="Link URL (optional, e.g. /category/spices)"
             value={linkUrl}
             onChange={(e) => setLinkUrl(e.target.value)}
-            className="border rounded px-3 py-2 flex-1"
+            className="border rounded px-3 py-2 flex-1 min-w-0"
           />
         </div>
 
@@ -165,14 +166,15 @@ export default function BannerManagement() {
 
       <div className="bg-white rounded-lg shadow-sm divide-y">
         {banners.map((banner, index) => (
-          <div key={banner._id} className="flex items-center gap-3 px-4 py-3">
+          // Wraps on phones: image + text on the first line, controls drop to a second line.
+          <div key={banner._id} className="flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 py-3">
             <img
-              src={banner.image}
+              src={getCloudinaryThumbnail(banner.image, 160)}
               alt=""
               className="w-20 h-12 rounded object-cover border border-gray-200 shrink-0"
             />
 
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-[calc(100%-6.75rem)] sm:basis-auto">
               <p className="font-medium text-gray-800 truncate">
                 {banner.title || <span className="text-gray-400 italic">No title</span>}
               </p>
