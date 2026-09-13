@@ -1,10 +1,14 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { tokenTtlFor } = require("../utils/generateToken");
 
 /**
  * "protect" checks for a valid JWT in the Authorization header and,
  * if valid, attaches the matching user document to req.user.
  * Use this on any route that requires a logged-in user.
+ *
+ * Expired sessions get `code: "SESSION_EXPIRED"` in the response, so the storefront and
+ * admin apps can show "please log in again" instead of a generic error.
  */
 const protect = async (req, res, next) => {
   let token;
@@ -18,16 +22,32 @@ const protect = async (req, res, next) => {
     return res.status(401).json({ message: "Not authorized, no token provided" });
   }
 
+  let decoded;
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await User.findById(decoded.id); // password excluded by schema's select:false
-    if (!req.user) {
-      return res.status(401).json({ message: "Not authorized, user no longer exists" });
-    }
-    next();
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
   } catch (error) {
-    return res.status(401).json({ message: "Not authorized, token invalid or expired" });
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Your session has expired. Please log in again.", code: "SESSION_EXPIRED" });
+    }
+    return res.status(401).json({ message: "Not authorized, token invalid" });
   }
+
+  req.user = await User.findById(decoded.id); // password excluded by schema's select:false
+  if (!req.user) {
+    return res.status(401).json({ message: "Not authorized, user no longer exists" });
+  }
+
+  // Enforce the lifetime for the account's CURRENT role, measured from when the token was
+  // issued - not just the token's own "exp". This matters because:
+  //   - tokens issued before this rule existed carried a 30-day exp; this cuts them off
+  //   - an account promoted to admin can't keep using a long-lived customer token
+  const ageSeconds = Math.floor(Date.now() / 1000) - decoded.iat;
+  if (ageSeconds > tokenTtlFor(req.user)) {
+    return res.status(401).json({ message: "Your session has expired. Please log in again.", code: "SESSION_EXPIRED" });
+  }
+
+  req.tokenPayload = decoded; // used by /auth/refresh to keep the original login time
+  next();
 };
 
 /**

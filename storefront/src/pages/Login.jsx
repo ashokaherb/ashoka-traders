@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, sessionExpired } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   // If we got here via the checkout gate ("/login?redirect=/checkout"), continue
@@ -34,7 +34,13 @@ export default function Login() {
     <div className="max-w-md mx-auto mt-10 bg-white p-6 rounded-lg shadow-sm">
       <h1 className="text-2xl font-bold mb-4 text-gray-800">Log in</h1>
 
-      {redirectTo === "/checkout" && (
+      {sessionExpired && (
+        <p className="mb-4 text-sm text-amber-900 bg-amber-50 p-2 rounded">
+          Your session expired for your security. Please log in again - your cart is still saved.
+        </p>
+      )}
+
+      {!sessionExpired && redirectTo === "/checkout" && (
         <p className="mb-4 text-sm text-brand-700 bg-brand-50 p-2 rounded">
           Log in or register to continue to checkout - your cart will be waiting.
         </p>

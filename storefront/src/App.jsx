@@ -3,6 +3,7 @@ import { Helmet } from "react-helmet-async";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import RequireAuth from "./components/RequireAuth";
+import SessionExpiredNotice from "./components/SessionExpiredNotice";
 import GoogleAnalytics from "./components/GoogleAnalytics";
 import Home from "./pages/Home";
 import Shop from "./pages/Shop";
@@ -38,6 +39,7 @@ export default function App() {
       <GoogleAnalytics />
 
       <Header />
+      <SessionExpiredNotice />
       <div className="flex-1">
         <Routes>
           <Route path="/" element={<Home />} />

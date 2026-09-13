@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const generateToken = require("../utils/generateToken");
+const { MAX_SESSION_SECONDS } = require("../utils/generateToken");
 
 /**
  * @route   POST /api/auth/register
@@ -42,7 +43,7 @@ const registerUser = async (req, res) => {
       whatsappOptIn: user.whatsappOptIn,
       whatsappNumber: user.whatsappNumber,
       whatsappOptInDate: user.whatsappOptInDate,
-      token: generateToken(user._id),
+      token: generateToken(user), // lifetime depends on role - see utils/generateToken.js
     });
   } catch (error) {
     res.status(500).json({ message: "Registration failed", error: error.message });
@@ -78,7 +79,7 @@ const loginUser = async (req, res) => {
       whatsappOptIn: user.whatsappOptIn,
       whatsappNumber: user.whatsappNumber,
       whatsappOptInDate: user.whatsappOptInDate,
-      token: generateToken(user._id),
+      token: generateToken(user), // lifetime depends on role - see utils/generateToken.js
     });
   } catch (error) {
     res.status(500).json({ message: "Login failed", error: error.message });
@@ -93,6 +94,39 @@ const loginUser = async (req, res) => {
 const getMe = async (req, res) => {
   // req.user was already attached by the "protect" middleware
   res.json(req.user);
+};
+
+/**
+ * @route   POST /api/auth/refresh
+ * @desc    Swap a still-valid customer token for a fresh one, so an active customer isn't
+ *          logged out every 7 days. The storefront calls this silently in the background.
+ *
+ *          Two limits keep refreshing from making a stolen token last forever:
+ *           - The new token keeps the ORIGINAL login time (authTime). Once that is older
+ *             than JWT_MAX_SESSION (30 days), refresh is refused - password required.
+ *           - Admin tokens can't be refreshed at all. Admin sessions are deliberately
+ *             capped at 24h: after that, the admin logs in again.
+ * @access  Private (customers only)
+ */
+const refreshToken = async (req, res) => {
+  if (req.user.isAdmin) {
+    return res.status(403).json({
+      message: "Admin sessions can't be extended. Please log in again.",
+      code: "REFRESH_NOT_ALLOWED",
+    });
+  }
+
+  // Tokens issued before authTime existed fall back to their issue time
+  const authTime = req.tokenPayload.authTime ?? req.tokenPayload.iat;
+  const sessionAgeSeconds = Math.floor(Date.now() / 1000) - authTime;
+  if (sessionAgeSeconds > MAX_SESSION_SECONDS) {
+    return res.status(401).json({
+      message: "For your security, please log in again.",
+      code: "SESSION_EXPIRED",
+    });
+  }
+
+  res.json({ token: generateToken(req.user, { authTime }) });
 };
 
 /**
@@ -132,4 +166,4 @@ const updateWhatsAppPreference = async (req, res) => {
   res.json(req.user);
 };
 
-module.exports = { registerUser, loginUser, getMe, updateAddress, updateWhatsAppPreference };
+module.exports = { registerUser, loginUser, getMe, refreshToken, updateAddress, updateWhatsAppPreference };

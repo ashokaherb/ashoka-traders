@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar, { NAV_ITEMS } from "./Sidebar";
 import AdminTopBar from "./AdminTopBar";
+import SessionTimeoutWarning from "./SessionTimeoutWarning";
 
 /**
  * Works out the top bar's page title from the current path. Checked most-specific
@@ -51,6 +52,7 @@ export default function AdminLayout() {
       {/* lg:pl-64 leaves room for the fixed desktop sidebar */}
       <div className="lg:pl-64">
         <AdminTopBar title={getPageTitle(location.pathname)} onOpenSidebar={() => setSidebarOpen(true)} />
+        <SessionTimeoutWarning />
         <main className="p-4 sm:p-6">
           <Outlet />
         </main>

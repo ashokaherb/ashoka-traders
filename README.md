@@ -424,8 +424,11 @@ simply unset):
 - [ ] **JWT_SECRET** - generate a fresh long random string for production (don't reuse the
       dev one). `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`
       generates one.
-- [ ] **Admin account** - set a real `ADMIN_EMAIL`/strong `ADMIN_PASSWORD` in the production
-      `.env` before running `npm run seed:admin` there (not `changeme123`).
+- [ ] **Admin account** - set a real `ADMIN_EMAIL` in the production `.env`, leave
+      `ADMIN_PASSWORD` blank, and run `npm run seed:admin` there. It generates a strong random
+      password and prints it once - save it in a password manager. (A weak `ADMIN_PASSWORD`
+      such as `changeme123` is refused.) Admin logins last 24h; customer logins 7d, silently
+      refreshed up to 30d - see `JWT_*` in `.env.example`.
 - [ ] **Razorpay live keys** - swap `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` from test mode to
       your live-mode keys (Razorpay dashboard, once your account is activated for live
       payments).

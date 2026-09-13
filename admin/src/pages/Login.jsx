@@ -1,10 +1,17 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, sessionExpired } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Set by PrivateRoute / SessionTimeoutWarning - the page to return to after logging in
+  const returnTo = location.state?.from || "/";
+
+  // Always starts empty. No default or remembered credentials live in this code; the
+  // autoComplete hints below only let the browser's own password manager offer what
+  // the admin has chosen to save there.
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -17,7 +24,7 @@ export default function Login() {
     setSubmitting(true);
     try {
       await login(form.email, form.password);
-      navigate("/");
+      navigate(returnTo, { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Login failed");
     } finally {
@@ -31,6 +38,12 @@ export default function Login() {
         <h1 className="text-2xl font-bold mb-1 text-gray-800">Admin Login</h1>
         <p className="text-sm text-gray-500 mb-4">Ashoka Traders management panel</p>
 
+        {sessionExpired && !error && (
+          <p className="mb-4 text-sm text-amber-900 bg-amber-50 p-2 rounded">
+            Your admin session ended - for security, admin logins last 24 hours. Please log in again.
+          </p>
+        )}
+
         {error && <p className="mb-4 text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
@@ -38,6 +51,7 @@ export default function Login() {
             type="email"
             name="email"
             placeholder="Admin email"
+            autoComplete="username"
             value={form.email}
             onChange={handleChange}
             required
@@ -47,6 +61,7 @@ export default function Login() {
             type="password"
             name="password"
             placeholder="Password"
+            autoComplete="current-password"
             value={form.password}
             onChange={handleChange}
             required
