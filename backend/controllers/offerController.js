@@ -29,25 +29,21 @@ const getAllOffers = async (req, res) => {
  * @access  Private/Admin
  */
 const createOffer = async (req, res) => {
-  try {
-    const { title, discountPercent, appliesTo, active, startDate, endDate } = req.body;
-    if (!title || discountPercent === undefined) {
-      return res.status(400).json({ message: "title and discountPercent are required" });
-    }
-
-    const offer = await Offer.create({
-      title,
-      discountPercent,
-      appliesTo: appliesTo || "all",
-      active: active !== undefined ? active : true,
-      startDate: startDate || null,
-      endDate: endDate || null,
-    });
-
-    res.status(201).json(offer);
-  } catch (error) {
-    res.status(500).json({ message: "Could not create offer", error: error.message });
+  const { title, discountPercent, appliesTo, active, startDate, endDate } = req.body;
+  if (!title || discountPercent === undefined) {
+    return res.status(400).json({ message: "title and discountPercent are required" });
   }
+
+  const offer = await Offer.create({
+    title,
+    discountPercent,
+    appliesTo: appliesTo || "all",
+    active: active !== undefined ? active : true,
+    startDate: startDate || null,
+    endDate: endDate || null,
+  });
+
+  res.status(201).json(offer);
 };
 
 /**

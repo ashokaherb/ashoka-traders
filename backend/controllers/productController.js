@@ -135,43 +135,39 @@ const getRelatedProducts = async (req, res) => {
  * @access  Private/Admin
  */
 const createProduct = async (req, res) => {
-  try {
-    const {
-      name,
-      description,
-      price,
-      category,
-      stock,
-      variants,
-      images,
-      lowStockThreshold,
-      isNewArrival,
-      rating,
-      reviewCount,
-    } = req.body;
+  const {
+    name,
+    description,
+    price,
+    category,
+    stock,
+    variants,
+    images,
+    lowStockThreshold,
+    isNewArrival,
+    rating,
+    reviewCount,
+  } = req.body;
 
-    if (!name || price === undefined || !category) {
-      return res.status(400).json({ message: "name, price and category are required" });
-    }
-
-    const product = await Product.create({
-      name,
-      description,
-      price,
-      category,
-      stock: stock || 0,
-      variants: variants || [],
-      images: images || [],
-      ...(lowStockThreshold !== undefined && { lowStockThreshold }),
-      ...(isNewArrival !== undefined && { isNewArrival }),
-      ...(rating !== undefined && { rating }),
-      ...(reviewCount !== undefined && { reviewCount }),
-    });
-
-    res.status(201).json(product);
-  } catch (error) {
-    res.status(500).json({ message: "Could not create product", error: error.message });
+  if (!name || price === undefined || !category) {
+    return res.status(400).json({ message: "name, price and category are required" });
   }
+
+  const product = await Product.create({
+    name,
+    description,
+    price,
+    category,
+    stock: stock || 0,
+    variants: variants || [],
+    images: images || [],
+    ...(lowStockThreshold !== undefined && { lowStockThreshold }),
+    ...(isNewArrival !== undefined && { isNewArrival }),
+    ...(rating !== undefined && { rating }),
+    ...(reviewCount !== undefined && { reviewCount }),
+  });
+
+  res.status(201).json(product);
 };
 
 /**
@@ -179,49 +175,45 @@ const createProduct = async (req, res) => {
  * @access  Private/Admin
  */
 const updateProduct = async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ message: "Product not found" });
+  const product = await Product.findById(req.params.id);
+  if (!product) return res.status(404).json({ message: "Product not found" });
 
-    // Snapshot BEFORE applying changes, so we can tell afterwards whether stock
-    // just crossed from "out of stock" to "available" (triggers notify-me emails).
-    const wasOutOfStock = isFullyOutOfStock(product);
+  // Snapshot BEFORE applying changes, so we can tell afterwards whether stock
+  // just crossed from "out of stock" to "available" (triggers notify-me emails).
+  const wasOutOfStock = isFullyOutOfStock(product);
 
-    const {
-      name,
-      description,
-      price,
-      category,
-      stock,
-      variants,
-      images,
-      isActive,
-      lowStockThreshold,
-      isNewArrival,
-      rating,
-      reviewCount,
-    } = req.body;
+  const {
+    name,
+    description,
+    price,
+    category,
+    stock,
+    variants,
+    images,
+    isActive,
+    lowStockThreshold,
+    isNewArrival,
+    rating,
+    reviewCount,
+  } = req.body;
 
-    if (name !== undefined) product.name = name;
-    if (description !== undefined) product.description = description;
-    if (price !== undefined) product.price = price;
-    if (category !== undefined) product.category = category;
-    if (stock !== undefined) product.stock = stock;
-    if (variants !== undefined) product.variants = variants;
-    if (images !== undefined) product.images = images;
-    if (isActive !== undefined) product.isActive = isActive;
-    if (lowStockThreshold !== undefined) product.lowStockThreshold = lowStockThreshold;
-    if (isNewArrival !== undefined) product.isNewArrival = isNewArrival;
-    if (rating !== undefined) product.rating = rating;
-    if (reviewCount !== undefined) product.reviewCount = reviewCount;
+  if (name !== undefined) product.name = name;
+  if (description !== undefined) product.description = description;
+  if (price !== undefined) product.price = price;
+  if (category !== undefined) product.category = category;
+  if (stock !== undefined) product.stock = stock;
+  if (variants !== undefined) product.variants = variants;
+  if (images !== undefined) product.images = images;
+  if (isActive !== undefined) product.isActive = isActive;
+  if (lowStockThreshold !== undefined) product.lowStockThreshold = lowStockThreshold;
+  if (isNewArrival !== undefined) product.isNewArrival = isNewArrival;
+  if (rating !== undefined) product.rating = rating;
+  if (reviewCount !== undefined) product.reviewCount = reviewCount;
 
-    const updated = await product.save();
-    await notifyIfBackInStock(updated, wasOutOfStock);
+  const updated = await product.save();
+  await notifyIfBackInStock(updated, wasOutOfStock);
 
-    res.json(updated);
-  } catch (error) {
-    res.status(500).json({ message: "Could not update product", error: error.message });
-  }
+  res.json(updated);
 };
 
 /**

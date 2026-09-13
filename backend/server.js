@@ -1,9 +1,17 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const morgan = require("morgan");
 const connectDB = require("./config/db");
+const { NODE_ENV, isProduction, TRUST_PROXY, checkProductionConfig } = require("./config/env");
 const errorHandler = require("./middleware/errorHandler");
+const {
+  loginLimiters,
+  registerLimiter,
+  couponValidateLimiter,
+  contactLimiter,
+} = require("./middleware/rateLimiters");
 
 const authRoutes = require("./routes/authRoutes");
 const productRoutes = require("./routes/productRoutes");
@@ -21,10 +29,39 @@ const cartRoutes = require("./routes/cartRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const bannerRoutes = require("./routes/bannerRoutes");
 
+// In production, stop here if a setting would be insecure (e.g. placeholder JWT_SECRET)
+checkProductionConfig();
+
 // Connect to MongoDB before anything else
 connectDB();
 
 const app = express();
+
+// Behind Railway's proxy, read the real visitor IP from X-Forwarded-For - rate limits
+// depend on it (see TRUST_PROXY in config/env.js).
+app.set("trust proxy", TRUST_PROXY);
+app.disable("x-powered-by"); // don't advertise "Express" (helmet also removes it)
+
+// --- Security headers (audit M13) ---
+// This server only returns JSON (plus the sitemap XML and invoice PDFs), never web pages,
+// so its Content-Security-Policy can be locked right down: nothing may load, run, or frame
+// an API response. The CSP that protects the actual shop pages is set where those pages
+// are hosted - see storefront/vite.config.js / admin/vite.config.js (Netlify _headers).
+// helmet also sets HSTS (HTTPS only, 1 year), X-Content-Type-Options: nosniff,
+// X-Frame-Options, Referrer-Policy and friends.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'none'"],
+        formAction: ["'none'"],
+      },
+    },
+  })
+);
 
 // --- Middleware ---
 // Only allow requests from our own storefront/admin apps (plus no-origin tools like Postman/curl)
@@ -35,13 +72,27 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error("Not allowed by CORS"));
+        // 403, not a generic 500 - the request is refused, the server isn't broken
+        callback(Object.assign(new Error("Not allowed by CORS"), { status: 403 }));
       }
     },
   })
 );
 app.use(express.json()); // parse JSON request bodies
-app.use(morgan("dev")); // log requests to the console during development
+
+// Request logging: every request in development; in production only failed requests
+// (4xx/5xx), in the standard "combined" format with IP + user agent for investigating abuse.
+app.use(
+  isProduction
+    ? morgan("combined", { skip: (req, res) => res.statusCode < 400 })
+    : morgan("dev")
+);
+
+// --- Rate limits (audit H2) - must come after express.json(), the login limiter reads the email ---
+app.use("/api/auth/login", loginLimiters);
+app.use("/api/auth/register", registerLimiter);
+app.use("/api/coupons/validate", couponValidateLimiter);
+app.use("/api/contact", contactLimiter);
 
 // --- Routes ---
 app.get("/", (req, res) => {
@@ -80,7 +131,7 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT} (${NODE_ENV} mode)`);
 });
 
 // --- Last-resort process guards (defence in depth) ---

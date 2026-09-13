@@ -46,7 +46,7 @@ const createCoupon = async (req, res) => {
     if (error.code === 11000) {
       return res.status(400).json({ message: "A coupon with this code already exists" });
     }
-    res.status(500).json({ message: "Could not create coupon", error: error.message });
+    throw error; // anything else -> central errorHandler (hides internals in production)
   }
 };
 

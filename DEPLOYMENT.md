@@ -43,6 +43,11 @@ EC2), Vercel, or Cloudflare Pages if you'd rather use one of those instead.
 4. Under the service's **Variables** tab, add every variable from `backend/.env.example`,
    filled in with real production values (see the checklist in README.md) - Railway
    injects these as environment variables, you don't upload a `.env` file.
+   **Set `NODE_ENV=production`** - this hides internal error details from API responses,
+   switches to production logging, and makes the server refuse to start with a weak
+   `JWT_SECRET` or missing `STOREFRONT_URL`/`ADMIN_URL`. Leave `TRUST_PROXY` unset (it
+   defaults to 1, correct for Railway's single proxy); if you later put Cloudflare in front
+   of Railway, set it to `2` or rate limits will see Cloudflare's IP instead of visitors'.
 5. Railway assigns a public URL like `https://your-app.up.railway.app` - this is your
    backend's address. Under **Settings -> Networking**, you can attach a custom domain
    here too (e.g. `api.yourdomain.com`) once you're ready (see step 5 below).
@@ -99,6 +104,12 @@ Both are plain Vite static builds - the steps are identical for each, just done 
    /*    /index.html   200
    ```
    Netlify picks this up automatically on the next deploy.
+
+   **Security headers are automatic:** every `npm run build` also writes `dist/_headers`
+   (Content-Security-Policy and friends - see `buildCsp` in each app's `vite.config.js`),
+   built from that site's `VITE_API_URL`. If you add a third-party service later (chat
+   widget, another analytics tool, images from a new host), add its domain there, or the
+   browser will block it.
 5. Once deployed, **update your backend's `.env`** (`STOREFRONT_URL` and `ADMIN_URL`) to
    the real Netlify URLs (or your custom domains, once attached) and redeploy the
    backend - CORS blocks requests from any origin not in that allowlist, so this step is

@@ -27,22 +27,18 @@ const getAllBanners = async (req, res) => {
  * @access  Private/Admin
  */
 const createBanner = async (req, res) => {
-  try {
-    const { image, title, linkUrl, active } = req.body;
-    if (!image) return res.status(400).json({ message: "Banner image is required" });
+  const { image, title, linkUrl, active } = req.body;
+  if (!image) return res.status(400).json({ message: "Banner image is required" });
 
-    const count = await Banner.countDocuments();
-    const banner = await Banner.create({
-      image,
-      title,
-      linkUrl,
-      active: active ?? true,
-      order: count,
-    });
-    res.status(201).json(banner);
-  } catch (error) {
-    res.status(500).json({ message: "Could not create banner", error: error.message });
-  }
+  const count = await Banner.countDocuments();
+  const banner = await Banner.create({
+    image,
+    title,
+    linkUrl,
+    active: active ?? true,
+    order: count,
+  });
+  res.status(201).json(banner);
 };
 
 /**
@@ -50,19 +46,15 @@ const createBanner = async (req, res) => {
  * @access  Private/Admin
  */
 const updateBanner = async (req, res) => {
-  try {
-    const banner = await Banner.findById(req.params.id);
-    if (!banner) return res.status(404).json({ message: "Banner not found" });
+  const banner = await Banner.findById(req.params.id);
+  if (!banner) return res.status(404).json({ message: "Banner not found" });
 
-    banner.image = req.body.image ?? banner.image;
-    banner.title = req.body.title ?? banner.title;
-    banner.linkUrl = req.body.linkUrl ?? banner.linkUrl;
-    banner.active = req.body.active ?? banner.active;
-    const updated = await banner.save();
-    res.json(updated);
-  } catch (error) {
-    res.status(500).json({ message: "Could not update banner", error: error.message });
-  }
+  banner.image = req.body.image ?? banner.image;
+  banner.title = req.body.title ?? banner.title;
+  banner.linkUrl = req.body.linkUrl ?? banner.linkUrl;
+  banner.active = req.body.active ?? banner.active;
+  const updated = await banner.save();
+  res.json(updated);
 };
 
 /**

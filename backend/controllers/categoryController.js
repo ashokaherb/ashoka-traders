@@ -61,7 +61,7 @@ const createCategory = async (req, res) => {
     if (error.code === 11000) {
       return res.status(400).json({ message: "A category with this name already exists" });
     }
-    res.status(error.status || 500).json({ message: error.message || "Could not create category" });
+    throw error; // anything else (incl. the 400 "nav slots full") -> central errorHandler
   }
 };
 
@@ -70,25 +70,22 @@ const createCategory = async (req, res) => {
  * @access  Private/Admin
  */
 const updateCategory = async (req, res) => {
-  try {
-    const category = await Category.findById(req.params.id);
-    if (!category) return res.status(404).json({ message: "Category not found" });
+  const category = await Category.findById(req.params.id);
+  if (!category) return res.status(404).json({ message: "Category not found" });
 
-    // Only re-check the nav slot limit if this update is actually turning the flag ON
-    // (switching it off, or leaving an already-featured category featured, never needs it).
-    if (req.body.showInNav && !category.showInNav) {
-      await assertNavSlotAvailable(category._id);
-    }
-
-    category.name = req.body.name ?? category.name;
-    category.description = req.body.description ?? category.description;
-    category.image = req.body.image ?? category.image;
-    category.showInNav = req.body.showInNav ?? category.showInNav;
-    const updated = await category.save();
-    res.json(updated);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || "Could not update category" });
+  // Only re-check the nav slot limit if this update is actually turning the flag ON
+  // (switching it off, or leaving an already-featured category featured, never needs it).
+  // Its "4 slots full" error has status 400, which the central errorHandler passes through.
+  if (req.body.showInNav && !category.showInNav) {
+    await assertNavSlotAvailable(category._id);
   }
+
+  category.name = req.body.name ?? category.name;
+  category.description = req.body.description ?? category.description;
+  category.image = req.body.image ?? category.image;
+  category.showInNav = req.body.showInNav ?? category.showInNav;
+  const updated = await category.save();
+  res.json(updated);
 };
 
 /**

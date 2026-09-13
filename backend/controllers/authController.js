@@ -8,46 +8,42 @@ const { MAX_SESSION_SECONDS } = require("../utils/generateToken");
  * @access  Public
  */
 const registerUser = async (req, res) => {
-  try {
-    const { name, email, password, phone, whatsappOptIn, whatsappNumber } = req.body;
+  const { name, email, password, phone, whatsappOptIn, whatsappNumber } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "Name, email and password are required" });
-    }
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: "An account with this email already exists" });
-    }
-
-    // Note: isAdmin is intentionally never taken from req.body - it defaults to false.
-    // The only admin account is created via the seed script (seed/seedAdmin.js).
-    const optingIn = Boolean(whatsappOptIn);
-    const user = await User.create({
-      name,
-      email,
-      password,
-      phone,
-      whatsappOptIn: optingIn,
-      whatsappNumber: optingIn ? whatsappNumber : "",
-      whatsappOptInDate: optingIn ? new Date() : null, // consent timestamp, for compliance record-keeping
-    });
-
-    res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      isAdmin: user.isAdmin,
-      address: user.address,
-      whatsappOptIn: user.whatsappOptIn,
-      whatsappNumber: user.whatsappNumber,
-      whatsappOptInDate: user.whatsappOptInDate,
-      token: generateToken(user), // lifetime depends on role - see utils/generateToken.js
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Registration failed", error: error.message });
+  if (!name || !email || !password) {
+    return res.status(400).json({ message: "Name, email and password are required" });
   }
+
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    return res.status(400).json({ message: "An account with this email already exists" });
+  }
+
+  // Note: isAdmin is intentionally never taken from req.body - it defaults to false.
+  // The only admin account is created via the seed script (seed/seedAdmin.js).
+  const optingIn = Boolean(whatsappOptIn);
+  const user = await User.create({
+    name,
+    email,
+    password,
+    phone,
+    whatsappOptIn: optingIn,
+    whatsappNumber: optingIn ? whatsappNumber : "",
+    whatsappOptInDate: optingIn ? new Date() : null, // consent timestamp, for compliance record-keeping
+  });
+
+  res.status(201).json({
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    isAdmin: user.isAdmin,
+    address: user.address,
+    whatsappOptIn: user.whatsappOptIn,
+    whatsappNumber: user.whatsappNumber,
+    whatsappOptInDate: user.whatsappOptInDate,
+    token: generateToken(user), // lifetime depends on role - see utils/generateToken.js
+  });
 };
 
 /**
@@ -56,34 +52,30 @@ const registerUser = async (req, res) => {
  * @access  Public
  */
 const loginUser = async (req, res) => {
-  try {
-    const { email, password } = req.body;
+  const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required" });
-    }
-
-    // password has select:false on the schema, so we explicitly ask for it here
-    const user = await User.findOne({ email }).select("+password");
-    if (!user || !(await user.matchPassword(password))) {
-      return res.status(401).json({ message: "Invalid email or password" });
-    }
-
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      isAdmin: user.isAdmin,
-      address: user.address,
-      whatsappOptIn: user.whatsappOptIn,
-      whatsappNumber: user.whatsappNumber,
-      whatsappOptInDate: user.whatsappOptInDate,
-      token: generateToken(user), // lifetime depends on role - see utils/generateToken.js
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Login failed", error: error.message });
+  if (!email || !password) {
+    return res.status(400).json({ message: "Email and password are required" });
   }
+
+  // password has select:false on the schema, so we explicitly ask for it here
+  const user = await User.findOne({ email }).select("+password");
+  if (!user || !(await user.matchPassword(password))) {
+    return res.status(401).json({ message: "Invalid email or password" });
+  }
+
+  res.json({
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    isAdmin: user.isAdmin,
+    address: user.address,
+    whatsappOptIn: user.whatsappOptIn,
+    whatsappNumber: user.whatsappNumber,
+    whatsappOptInDate: user.whatsappOptInDate,
+    token: generateToken(user), // lifetime depends on role - see utils/generateToken.js
+  });
 };
 
 /**

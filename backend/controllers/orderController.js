@@ -56,52 +56,48 @@ const notifyByWhatsApp = (user, order) => {
  * @access  Private
  */
 const createOrder = async (req, res) => {
-  try {
-    const { items, address, couponCode, paymentMethod } = req.body;
+  const { items, address, couponCode, paymentMethod } = req.body;
 
-    if (paymentMethod !== "COD") {
-      return res.status(400).json({ message: "Use /api/orders/razorpay for online payment" });
-    }
-    if (!address) {
-      return res.status(400).json({ message: "Shipping address is required" });
-    }
-
-    const pricing = await resolveOrderPricing({ items, couponCode });
-
-    // Stock deduction and order creation commit together (audit C3). If any item sold out
-    // since the check above, decrementStock throws, the transaction aborts, every earlier
-    // decrement is rolled back, and no order record is ever written.
-    const order = await runInTransaction(async (session) => {
-      await decrementStock(pricing.resolvedItems, session);
-      const [created] = await Order.create(
-        [
-          {
-            user: req.user._id,
-            items: pricing.resolvedItems,
-            address,
-            subtotal: pricing.subtotal,
-            shippingFee: pricing.shippingFee,
-            discount: pricing.discount,
-            couponCode: pricing.appliedCouponCode,
-            total: pricing.total,
-            paymentMethod: "COD",
-            paymentStatus: "pending",
-            orderStatus: "Placed",
-          },
-        ],
-        { session } // array form is required by Mongoose when passing options
-      );
-      return created;
-    });
-
-    // Notifications only after the transaction has committed
-    notifyByEmail(req.user, order);
-    notifyByWhatsApp(req.user, order);
-
-    res.status(201).json(order);
-  } catch (error) {
-    res.status(error.statusCode || 500).json({ message: error.message || "Could not create order" });
+  if (paymentMethod !== "COD") {
+    return res.status(400).json({ message: "Use /api/orders/razorpay for online payment" });
   }
+  if (!address) {
+    return res.status(400).json({ message: "Shipping address is required" });
+  }
+
+  const pricing = await resolveOrderPricing({ items, couponCode });
+
+  // Stock deduction and order creation commit together (audit C3). If any item sold out
+  // since the check above, decrementStock throws, the transaction aborts, every earlier
+  // decrement is rolled back, and no order record is ever written.
+  const order = await runInTransaction(async (session) => {
+    await decrementStock(pricing.resolvedItems, session);
+    const [created] = await Order.create(
+      [
+        {
+          user: req.user._id,
+          items: pricing.resolvedItems,
+          address,
+          subtotal: pricing.subtotal,
+          shippingFee: pricing.shippingFee,
+          discount: pricing.discount,
+          couponCode: pricing.appliedCouponCode,
+          total: pricing.total,
+          paymentMethod: "COD",
+          paymentStatus: "pending",
+          orderStatus: "Placed",
+        },
+      ],
+      { session } // array form is required by Mongoose when passing options
+    );
+    return created;
+  });
+
+  // Notifications only after the transaction has committed
+  notifyByEmail(req.user, order);
+  notifyByWhatsApp(req.user, order);
+
+  res.status(201).json(order);
 };
 
 /**
@@ -111,45 +107,41 @@ const createOrder = async (req, res) => {
  * @access  Private
  */
 const createRazorpayOrder = async (req, res) => {
-  try {
-    if (!razorpayInstance) {
-      return res.status(500).json({ message: "Razorpay is not configured on the server yet" });
-    }
-
-    const { items, couponCode } = req.body;
-    const pricing = await resolveOrderPricing({ items, couponCode });
-
-    const amountPaise = Math.round(pricing.total * 100); // Razorpay expects paise
-    const razorpayOrder = await razorpayInstance.orders.create({
-      amount: amountPaise,
-      currency: "INR",
-      receipt: `receipt_${Date.now()}`,
-    });
-
-    // Remember what THIS Razorpay order is supposed to cost. /verify builds the real Order
-    // from this record, so nothing the client sends later can change the items or price.
-    await PaymentIntent.create({
-      razorpayOrderId: razorpayOrder.id,
-      user: req.user._id,
-      items: pricing.resolvedItems,
-      subtotal: pricing.subtotal,
-      shippingFee: pricing.shippingFee,
-      discount: pricing.discount,
-      couponCode: pricing.appliedCouponCode,
-      total: pricing.total,
-      amountPaise,
-    });
-
-    res.json({
-      razorpayOrderId: razorpayOrder.id,
-      amount: razorpayOrder.amount,
-      currency: razorpayOrder.currency,
-      key: process.env.RAZORPAY_KEY_ID, // safe to expose - only the secret must stay server-side
-      pricing, // lets the frontend show an accurate summary while the payment popup is open
-    });
-  } catch (error) {
-    res.status(error.statusCode || 500).json({ message: error.message || "Could not create Razorpay order" });
+  if (!razorpayInstance) {
+    return res.status(500).json({ message: "Razorpay is not configured on the server yet" });
   }
+
+  const { items, couponCode } = req.body;
+  const pricing = await resolveOrderPricing({ items, couponCode });
+
+  const amountPaise = Math.round(pricing.total * 100); // Razorpay expects paise
+  const razorpayOrder = await razorpayInstance.orders.create({
+    amount: amountPaise,
+    currency: "INR",
+    receipt: `receipt_${Date.now()}`,
+  });
+
+  // Remember what THIS Razorpay order is supposed to cost. /verify builds the real Order
+  // from this record, so nothing the client sends later can change the items or price.
+  await PaymentIntent.create({
+    razorpayOrderId: razorpayOrder.id,
+    user: req.user._id,
+    items: pricing.resolvedItems,
+    subtotal: pricing.subtotal,
+    shippingFee: pricing.shippingFee,
+    discount: pricing.discount,
+    couponCode: pricing.appliedCouponCode,
+    total: pricing.total,
+    amountPaise,
+  });
+
+  res.json({
+    razorpayOrderId: razorpayOrder.id,
+    amount: razorpayOrder.amount,
+    currency: razorpayOrder.currency,
+    key: process.env.RAZORPAY_KEY_ID, // safe to expose - only the secret must stay server-side
+    pricing, // lets the frontend show an accurate summary while the payment popup is open
+  });
 };
 
 // Security events get one consistent, greppable prefix so they're easy to find in the logs.
