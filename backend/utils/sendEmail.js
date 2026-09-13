@@ -70,6 +70,44 @@ const sendAdminNewOrderAlert = async (order) => {
   });
 };
 
+/**
+ * Sent to the admin when a customer has PAID but the order can't be fulfilled because an
+ * item sold out between checkout and payment (audit C3). The order is saved as Cancelled
+ * with paymentStatus "refund_requested" - the money has to be refunded by hand in the
+ * Razorpay dashboard, so this email is the admin's to-do item.
+ *
+ * Only triggered by that automatic case. An admin manually setting "refund_requested" on
+ * the Order Detail page doesn't send it - they already know.
+ */
+const sendAdminRefundRequiredAlert = async (order, { user, reason }) => {
+  await sendMail({
+    to: process.env.ADMIN_EMAIL,
+    subject: `[Action Needed] Refund required for Order #${order._id} — item sold out after payment`,
+    text: [
+      `A customer paid online, but their order could NOT be placed: ${reason}.`,
+      `The order has been saved as Cancelled / refund_requested and no stock was deducted.`,
+      ``,
+      `REFUND TO ISSUE`,
+      `  Amount:              Rs.${order.total}`,
+      `  Razorpay payment ID: ${order.razorpayPaymentId}`,
+      `  Razorpay order ID:   ${order.razorpayOrderId}`,
+      ``,
+      `CUSTOMER`,
+      `  Name:  ${user.name}`,
+      `  Email: ${user.email}`,
+      `  Phone: ${order.address?.phone || user.phone || "-"}`,
+      ``,
+      formatOrderSummary(order),
+      ``,
+      `WHAT TO DO`,
+      `  1. Razorpay Dashboard -> Transactions -> Payments -> search the payment ID above -> Refund (full amount).`,
+      `  2. Admin panel -> Orders -> this order -> set Payment Status to "refunded" and save,`,
+      `     so the customer sees it in their "My Orders".`,
+      `  3. Optionally contact the customer to apologise / offer an alternative.`,
+    ].join("\n"),
+  });
+};
+
 /** Sent to everyone who clicked "Notify Me" once a product is back in stock. */
 const sendBackInStockEmail = async (user, product) => {
   await sendMail({
@@ -91,6 +129,7 @@ const sendAdminContactQueryAlert = async (query) => {
 module.exports = {
   sendOrderConfirmationEmail,
   sendAdminNewOrderAlert,
+  sendAdminRefundRequiredAlert,
   sendBackInStockEmail,
   sendAdminContactQueryAlert,
 };

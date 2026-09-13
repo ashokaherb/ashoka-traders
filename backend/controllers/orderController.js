@@ -9,7 +9,11 @@ const {
   OutOfStockError,
   getSettings,
 } = require("../utils/orderHelpers");
-const { sendOrderConfirmationEmail, sendAdminNewOrderAlert } = require("../utils/sendEmail");
+const {
+  sendOrderConfirmationEmail,
+  sendAdminNewOrderAlert,
+  sendAdminRefundRequiredAlert,
+} = require("../utils/sendEmail");
 const { sendWhatsAppMessage } = require("../utils/whatsappService");
 const { generateInvoicePDF } = require("../utils/generateInvoicePDF");
 
@@ -334,6 +338,11 @@ const verifyRazorpayPayment = async (req, res) => {
       console.error(
         `[REFUND NEEDED] Paid order could not be fulfilled - ${error.message}.`,
         JSON.stringify({ orderId: refundOrder._id, razorpayPaymentId, amount: claimed.total, userId: req.user._id })
+      );
+      // Fire-and-forget, like the other notifications - a mail failure must not change
+      // the response. The order record + log line above are the fallback if it fails.
+      sendAdminRefundRequiredAlert(refundOrder, { user: req.user, reason: error.message }).catch((err) =>
+        console.error("Email error (refund alert):", err.message)
       );
 
       return res.status(409).json({
