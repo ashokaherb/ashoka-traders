@@ -1,22 +1,38 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
+import Pager from "../components/Pager";
+
+const PAGE_SIZE = 20;
 
 export default function ProductList() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
-  const loadProducts = () => {
+  const loadProducts = (pageNumber = page) => {
     setLoading(true);
     api
-      .get("/products")
-      .then((res) => setProducts(res.data))
+      .get("/products", { params: { page: pageNumber, limit: PAGE_SIZE } })
+      .then((res) => {
+        // Deleting the last product on the last page -> step back a page.
+        if (res.data.data.length === 0 && pageNumber > 1) {
+          setPage(pageNumber - 1);
+          return;
+        }
+        setProducts(res.data.data);
+        setTotalPages(res.data.totalPages);
+        setTotalCount(res.data.totalCount);
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
-    loadProducts();
-  }, []);
+    loadProducts(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this product?")) return;
@@ -37,9 +53,10 @@ export default function ProductList() {
           </Link>
         </div>
 
-        {loading ? (
+        {loading && products.length === 0 ? (
           <p className="text-gray-500">Loading...</p>
         ) : (
+          <>
           <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-100 text-gray-600">
@@ -89,6 +106,18 @@ export default function ProductList() {
               </tbody>
             </table>
           </div>
+          <Pager
+            page={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            itemLabel="products"
+            disabled={loading}
+            onChange={(next) => {
+              setPage(next);
+              window.scrollTo({ top: 0 });
+            }}
+          />
+          </>
         )}
       </div>
     </div>

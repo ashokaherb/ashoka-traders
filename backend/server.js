@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const mongoSanitize = require("express-mongo-sanitize");
 const connectDB = require("./config/db");
 const { NODE_ENV, isProduction, TRUST_PROXY, checkProductionConfig } = require("./config/env");
 const errorHandler = require("./middleware/errorHandler");
@@ -79,6 +80,18 @@ app.use(
   })
 );
 app.use(express.json()); // parse JSON request bodies
+
+// NoSQL operator injection guard (audit M1). Express turns ?category[$ne]=x into
+// { category: { $ne: "x" } }, and a JSON body can carry { "email": { "$gt": "" } } - passed
+// into a Mongo filter, those become query operators. This strips every key starting with
+// "$" or containing "." from req.body, req.query and req.headers before any route sees them.
+// Controllers still type-check the values they use (belt and braces).
+app.use(
+  mongoSanitize({
+    onSanitize: ({ req, key }) =>
+      console.warn(`[INJECTION ATTEMPT BLOCKED] ${req.method} ${req.originalUrl} - stripped operator keys from req.${key} (ip ${req.ip})`),
+  })
+);
 
 // Request logging: every request in development; in production only failed requests
 // (4xx/5xx), in the standard "combined" format with IP + user agent for investigating abuse.

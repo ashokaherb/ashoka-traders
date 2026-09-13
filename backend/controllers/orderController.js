@@ -12,6 +12,7 @@ const {
 } = require("../utils/orderHelpers");
 const { claimCouponUse } = require("../utils/couponRules");
 const { nextBillNumber, ensureBillNumber } = require("../utils/billNumber");
+const { parsePagination, paginatedResponse } = require("../utils/pagination");
 const {
   sendOrderConfirmationEmail,
   sendAdminNewOrderAlert,
@@ -384,12 +385,19 @@ const verifyRazorpayPayment = async (req, res) => {
 };
 
 /**
- * @route   GET /api/orders/my
+ * @route   GET /api/orders/my?page=&limit=
+ * @desc    The customer's orders, newest first, paginated (default 20 per page).
+ *          Returns { data, page, limit, totalPages, totalCount }.
  * @access  Private
  */
 const getMyOrders = async (req, res) => {
-  const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
-  res.json(orders);
+  const pagination = parsePagination(req.query);
+  const filter = { user: req.user._id };
+  const [orders, totalCount] = await Promise.all([
+    Order.find(filter).sort({ createdAt: -1 }).skip(pagination.skip).limit(pagination.limit),
+    Order.countDocuments(filter),
+  ]);
+  res.json(paginatedResponse(orders, pagination, totalCount));
 };
 
 /**
@@ -430,12 +438,37 @@ const downloadInvoice = async (req, res) => {
 };
 
 /**
- * @route   GET /api/orders
+ * @route   GET /api/orders?page=&limit=
+ * @desc    All orders, newest first, paginated (default 20 per page).
+ *          Returns { data, page, limit, totalPages, totalCount }.
  * @access  Private/Admin
  */
 const getAllOrders = async (req, res) => {
-  const orders = await Order.find().populate("user", "name email").sort({ createdAt: -1 });
-  res.json(orders);
+  const pagination = parsePagination(req.query);
+  const [orders, totalCount] = await Promise.all([
+    Order.find()
+      .populate("user", "name email")
+      .sort({ createdAt: -1 }) // matches the createdAt index (audit M2)
+      .skip(pagination.skip)
+      .limit(pagination.limit),
+    Order.countDocuments(),
+  ]);
+  res.json(paginatedResponse(orders, pagination, totalCount));
+};
+
+/**
+ * One CSV cell. Text cells starting with = + - @ (or tab / carriage return) are prefixed
+ * with a single quote, so Excel/Sheets show them as text instead of running them as a
+ * formula (audit M14) - a customer named =HYPERLINK("http://evil.com","click") would
+ * otherwise put a live link in the admin's spreadsheet. Wrapping in quotes alone doesn't
+ * stop this. Numbers (totals) are left alone. Then commas, quotes and newlines are
+ * escaped as usual.
+ */
+const escapeCsv = (value) => {
+  if (typeof value === "number") return String(value);
+  let str = String(value ?? "");
+  if (/^[=+\-@\t\r]/.test(str)) str = `'${str}`;
+  return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 };
 
 /**
@@ -446,6 +479,11 @@ const getAllOrders = async (req, res) => {
  */
 const exportOrdersCSV = async (req, res) => {
   const { startDate, endDate } = req.query;
+  // YYYY-MM-DD strings only - anything else (arrays, objects, junk) is rejected (audit M1).
+  const isDay = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(new Date(v).getTime());
+  if ((startDate !== undefined && !isDay(startDate)) || (endDate !== undefined && !isDay(endDate))) {
+    return res.status(400).json({ message: "startDate and endDate must be dates in YYYY-MM-DD format" });
+  }
   const filter = {};
   if (startDate || endDate) {
     filter.createdAt = {};
@@ -458,12 +496,6 @@ const exportOrdersCSV = async (req, res) => {
   }
 
   const orders = await Order.find(filter).populate("user", "name email").sort({ createdAt: -1 });
-
-  // A value containing a comma, quote, or newline needs wrapping in quotes (with quotes doubled).
-  const escapeCsv = (value) => {
-    const str = String(value ?? "");
-    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-  };
 
   const header = ["Order ID", "Customer", "Items", "Total", "Payment Method", "Payment Status", "Order Status", "Date"];
   const rows = orders.map((order) => {

@@ -1,19 +1,24 @@
+import { lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import PrivateRoute from "./components/PrivateRoute";
 import AdminLayout from "./components/AdminLayout";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import ProductList from "./pages/ProductList";
-import ProductForm from "./pages/ProductForm";
-import CategoryManagement from "./pages/CategoryManagement";
-import OfferManagement from "./pages/OfferManagement";
-import BannerManagement from "./pages/BannerManagement";
-import BulkUpload from "./pages/BulkUpload";
-import OrderList from "./pages/OrderList";
-import OrderDetail from "./pages/OrderDetail";
-import CouponManagement from "./pages/CouponManagement";
-import SettingsPage from "./pages/SettingsPage";
-import AdminProfile from "./pages/AdminProfile";
+
+// Every page behind the login loads as its own chunk (audit M7). The login screen no longer
+// downloads recharts (Dashboard) or any other page's code first. The Suspense fallback
+// lives inside AdminLayout, so the sidebar stays put while a page loads.
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const ProductList = lazy(() => import("./pages/ProductList"));
+const ProductForm = lazy(() => import("./pages/ProductForm"));
+const CategoryManagement = lazy(() => import("./pages/CategoryManagement"));
+const OfferManagement = lazy(() => import("./pages/OfferManagement"));
+const BannerManagement = lazy(() => import("./pages/BannerManagement"));
+const BulkUpload = lazy(() => import("./pages/BulkUpload"));
+const OrderList = lazy(() => import("./pages/OrderList"));
+const OrderDetail = lazy(() => import("./pages/OrderDetail"));
+const CouponManagement = lazy(() => import("./pages/CouponManagement"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const AdminProfile = lazy(() => import("./pages/AdminProfile"));
 
 export default function App() {
   return (

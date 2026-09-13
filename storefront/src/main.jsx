@@ -6,6 +6,7 @@ import App from "./App.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
+import { AppDataProvider } from "./context/AppDataContext.jsx";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -16,14 +17,17 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         {/* AuthProvider makes the logged-in user available to every page via useAuth().
             CartProvider makes the cart available via useCart() - it works independently
             of login, which is what lets guests add to cart before signing in.
-            WishlistProvider needs AuthProvider (it reloads whenever the user changes). */}
-        <AuthProvider>
-          <CartProvider>
-            <WishlistProvider>
-              <App />
-            </WishlistProvider>
-          </CartProvider>
-        </AuthProvider>
+            WishlistProvider needs AuthProvider (it reloads whenever the user changes).
+            AppDataProvider fetches categories + settings once for every page (useAppData). */}
+        <AppDataProvider>
+          <AuthProvider>
+            <CartProvider>
+              <WishlistProvider>
+                <App />
+              </WishlistProvider>
+            </CartProvider>
+          </AuthProvider>
+        </AppDataProvider>
       </BrowserRouter>
     </HelmetProvider>
   </React.StrictMode>

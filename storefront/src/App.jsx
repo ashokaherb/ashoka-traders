@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import Header from "./components/Header";
@@ -5,22 +6,27 @@ import Footer from "./components/Footer";
 import RequireAuth from "./components/RequireAuth";
 import SessionExpiredNotice from "./components/SessionExpiredNotice";
 import GoogleAnalytics from "./components/GoogleAnalytics";
+import PageLoader from "./components/PageLoader";
+// Browsing pages stay in the main bundle so the homepage, shop and product pages open instantly.
 import Home from "./pages/Home";
 import Shop from "./pages/Shop";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
 import ProductDetail from "./pages/ProductDetail";
 import Cart from "./pages/Cart";
-import Checkout from "./pages/Checkout";
-import OrderSuccess from "./pages/OrderSuccess";
-import MyOrders from "./pages/MyOrders";
-import Wishlist from "./pages/Wishlist";
-import Profile from "./pages/Profile";
-import AboutUs from "./pages/AboutUs";
-import ContactUs from "./pages/ContactUs";
-import Terms from "./pages/Terms";
-import Privacy from "./pages/Privacy";
-import Returns from "./pages/Returns";
+
+// Everything else loads on demand as its own chunk (audit M7) - a first-time visitor's
+// homepage doesn't download checkout, account or legal pages they may never open.
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const Checkout = lazy(() => import("./pages/Checkout"));
+const OrderSuccess = lazy(() => import("./pages/OrderSuccess"));
+const MyOrders = lazy(() => import("./pages/MyOrders"));
+const Wishlist = lazy(() => import("./pages/Wishlist"));
+const Profile = lazy(() => import("./pages/Profile"));
+const AboutUs = lazy(() => import("./pages/AboutUs"));
+const ContactUs = lazy(() => import("./pages/ContactUs"));
+const Terms = lazy(() => import("./pages/Terms"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const Returns = lazy(() => import("./pages/Returns"));
 
 export default function App() {
   return (
@@ -41,7 +47,8 @@ export default function App() {
       <Header />
       <SessionExpiredNotice />
       <div className="flex-1">
-        <Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/shop" element={<Shop />} />
           <Route path="/category/:slug" element={<Shop />} />
@@ -94,7 +101,8 @@ export default function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/returns" element={<Returns />} />
-        </Routes>
+          </Routes>
+        </Suspense>
       </div>
       <Footer />
     </div>

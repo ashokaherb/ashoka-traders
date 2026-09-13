@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 import api from "../api/axios";
 
+// GET /products is paginated (max 100 per page) - the CSV template needs every product.
+async function fetchAllProducts() {
+  const all = [];
+  for (let page = 1; ; page++) {
+    const { data } = await api.get("/products", { params: { page, limit: 100 } });
+    all.push(...data.data);
+    if (page >= data.totalPages) return all;
+  }
+}
+
 export default function BulkUpload() {
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
@@ -9,7 +19,7 @@ export default function BulkUpload() {
   const [products, setProducts] = useState([]);
 
   useEffect(() => {
-    api.get("/products").then((res) => setProducts(res.data));
+    fetchAllProducts().then(setProducts);
   }, []);
 
   // Generates a ready-to-edit CSV from the current product list, so the admin
@@ -43,7 +53,7 @@ export default function BulkUpload() {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setResult(data);
-      api.get("/products").then((res) => setProducts(res.data)); // refresh template data
+      fetchAllProducts().then(setProducts); // refresh template data
     } catch (err) {
       setError(err.response?.data?.message || "Upload failed");
     } finally {

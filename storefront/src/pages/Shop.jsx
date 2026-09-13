@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import api from "../api/axios";
+import { useAppData } from "../context/AppDataContext";
 import CategoryFilter from "../components/CategoryFilter";
 import ProductGrid from "../components/ProductGrid";
 import { Close } from "../components/icons";
@@ -13,45 +14,86 @@ import { Close } from "../components/icons";
  *
  * The header's search box navigates here with ?search=, so this is also the
  * search results page.
+ *
+ * Products load 20 at a time with a "Load More" button (audit M3) rather than the whole
+ * catalogue at once.
  */
+const PAGE_SIZE = 20;
+
 export default function Shop() {
   const { slug: categorySlug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const search = searchParams.get("search") || "";
 
-  const [categories, setCategories] = useState([]);
+  const { categories, categoriesLoading } = useAppData();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api
-      .get("/categories")
-      .then((res) => setCategories(res.data))
-      .catch(() => setCategories([]));
-  }, []);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const selectedCategory = categorySlug ? categories.find((c) => c.slug === categorySlug) : null;
   const selectedCategoryId = selectedCategory?._id || "";
 
   // Wait for categories before fetching, so a category URL doesn't briefly show
   // the whole catalogue before the filter resolves.
-  const waitingForCategory = Boolean(categorySlug) && categories.length === 0;
+  const waitingForCategory = Boolean(categorySlug) && categoriesLoading;
 
+  const buildParams = (pageNumber) => {
+    const params = { page: pageNumber, limit: PAGE_SIZE };
+    if (selectedCategoryId) params.category = selectedCategoryId;
+    if (search) params.search = search;
+    return params;
+  };
+
+  // A new category/search starts again from page 1.
   useEffect(() => {
     if (waitingForCategory) return;
 
+    let cancelled = false;
     setLoading(true);
-    const params = {};
-    if (selectedCategoryId) params.category = selectedCategoryId;
-    if (search) params.search = search;
-
     api
-      .get("/products", { params })
-      .then((res) => setProducts(res.data))
-      .catch(() => setProducts([]))
-      .finally(() => setLoading(false));
+      .get("/products", { params: buildParams(1) })
+      .then((res) => {
+        if (cancelled) return;
+        setProducts(res.data.data);
+        setPage(1);
+        setTotalPages(res.data.totalPages);
+        setTotalCount(res.data.totalCount);
+      })
+      .catch(() => {
+        if (!cancelled) setProducts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // buildParams only reads the values listed here
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategoryId, search, waitingForCategory]);
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const { data } = await api.get("/products", { params: buildParams(page + 1) });
+      // Skip anything already shown, in case a product was added between page loads.
+      setProducts((prev) => {
+        const seen = new Set(prev.map((p) => p._id));
+        return [...prev, ...data.data.filter((p) => !seen.has(p._id))];
+      });
+      setPage(data.page);
+      setTotalPages(data.totalPages);
+      setTotalCount(data.totalCount);
+    } catch {
+      // Leave the button in place so the customer can simply try again.
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   // CategoryFilter works in category ids - translate its choice back into a route.
   const handleSelectCategory = (categoryId) => {
@@ -122,6 +164,24 @@ export default function Shop() {
               : "No products in this category yet."
           }
         />
+
+        {!loading && !waitingForCategory && products.length > 0 && (
+          <div className="mt-6 flex flex-col items-center gap-2">
+            <p className="text-xs text-gray-500">
+              Showing {products.length} of {totalCount} products
+            </p>
+            {page < totalPages && (
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="bg-white border border-brand-600 text-brand-700 font-semibold rounded-full px-6 py-2 text-sm hover:bg-brand-600 hover:text-white disabled:opacity-60"
+              >
+                {loadingMore ? "Loading..." : "Load More"}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

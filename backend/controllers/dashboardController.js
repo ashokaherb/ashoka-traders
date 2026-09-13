@@ -8,8 +8,6 @@ const startOfDay = (date) => {
   return d;
 };
 
-const sumTotals = (orders) => orders.reduce((sum, o) => sum + o.total, 0);
-
 /**
  * @route   GET /api/dashboard
  * @desc    Everything the admin Dashboard page needs in one call: order/revenue
@@ -24,19 +22,58 @@ const getDashboardStats = async (req, res) => {
   weekStart.setDate(weekStart.getDate() - 6); // last 7 days including today
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  // Order count + revenue for today / last 7 days / this month, counted inside MongoDB in
+  // ONE aggregation (audit M4) - only a single summary document comes back to Node,
+  // instead of every order in the month. The $match uses the createdAt index; the
+  // earlier of week/month start covers both windows (early in a month the 7-day window
+  // reaches back into last month).
+  const countAndSum = (since) => ({
+    count: { $sum: { $cond: [{ $gte: ["$createdAt", since] }, 1, 0] } },
+    revenue: { $sum: { $cond: [{ $gte: ["$createdAt", since] }, "$total", 0] } },
+  });
+  const periodsStart = weekStart < monthStart ? weekStart : monthStart;
+  const periodTotalsPipeline = [
+    { $match: { createdAt: { $gte: periodsStart } } },
+    {
+      $group: {
+        _id: null,
+        todayCount: countAndSum(todayStart).count,
+        todayRevenue: countAndSum(todayStart).revenue,
+        weekCount: countAndSum(weekStart).count,
+        weekRevenue: countAndSum(weekStart).revenue,
+        monthCount: countAndSum(monthStart).count,
+        monthRevenue: countAndSum(monthStart).revenue,
+      },
+    },
+  ];
+
+  // Low stock, filtered by MongoDB instead of loading every active product (audit M4).
+  // A product is low if it has no variants and stock <= its threshold, or if ANY variant is
+  // at/below the threshold - the same rule the old in-JS filter applied.
+  const lowStockFilter = {
+    isActive: true,
+    $expr: {
+      $cond: [
+        { $gt: [{ $size: { $ifNull: ["$variants", []] } }, 0] },
+        {
+          $anyElementTrue: [
+            { $map: { input: "$variants", as: "v", in: { $lte: ["$$v.stock", "$lowStockThreshold"] } } },
+          ],
+        },
+        { $lte: ["$stock", "$lowStockThreshold"] },
+      ],
+    },
+  };
+
   const [
-    ordersToday,
-    ordersWeek,
-    ordersMonth,
+    periodTotals,
     recentOrders,
     topProductsAgg,
     trendAgg,
-    allProducts,
+    lowStockProducts,
     whatsappOptInCount,
   ] = await Promise.all([
-      Order.find({ createdAt: { $gte: todayStart } }),
-      Order.find({ createdAt: { $gte: weekStart } }),
-      Order.find({ createdAt: { $gte: monthStart } }),
+      Order.aggregate(periodTotalsPipeline),
       Order.find().populate("user", "name").sort({ createdAt: -1 }).limit(10),
       // Top 5 best-selling products by quantity sold, all-time
       Order.aggregate([
@@ -61,7 +98,7 @@ const getDashboardStats = async (req, res) => {
           },
         },
       ]),
-      Product.find({ isActive: true }),
+      Product.find(lowStockFilter),
       // Lets the admin gauge broadcast reach before sending an offer/new-arrival WhatsApp update.
       User.countDocuments({ whatsappOptIn: true }),
     ]);
@@ -76,19 +113,15 @@ const getDashboardStats = async (req, res) => {
     revenueTrend.push({ date: key, revenue: trendMap[key] || 0 });
   }
 
-  const lowStockProducts = allProducts.filter((p) =>
-    p.variants && p.variants.length > 0
-      ? p.variants.some((v) => v.stock <= p.lowStockThreshold)
-      : p.stock <= p.lowStockThreshold
-  );
+  const totals = periodTotals[0] || {}; // no orders in either window -> no group -> zeros
 
   res.json({
-    ordersToday: ordersToday.length,
-    ordersWeek: ordersWeek.length,
-    ordersMonth: ordersMonth.length,
-    revenueToday: sumTotals(ordersToday),
-    revenueWeek: sumTotals(ordersWeek),
-    revenueMonth: sumTotals(ordersMonth),
+    ordersToday: totals.todayCount || 0,
+    ordersWeek: totals.weekCount || 0,
+    ordersMonth: totals.monthCount || 0,
+    revenueToday: totals.todayRevenue || 0,
+    revenueWeek: totals.weekRevenue || 0,
+    revenueMonth: totals.monthRevenue || 0,
     topProducts: topProductsAgg,
     revenueTrend,
     recentOrders,

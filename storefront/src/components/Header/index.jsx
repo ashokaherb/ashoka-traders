@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import api from "../../api/axios";
 import { useAuth } from "../../context/AuthContext";
+import { useAppData } from "../../context/AppDataContext";
 import TopBar from "./TopBar";
 import MainHeaderRow from "./MainHeaderRow";
 import NavBar from "./NavBar";
@@ -9,27 +9,15 @@ import { Close } from "../icons";
 
 /**
  * Composes the three header rows (TopBar / MainHeaderRow / NavBar) and owns the
- * mobile slide-out drawer. Categories and store settings are fetched once here and
- * passed down, so the rows don't each hit the API.
+ * mobile slide-out drawer. Categories and store settings come from the shared AppDataContext
+ * (fetched once for the whole app) and are passed down to the rows.
  */
 export default function Header() {
-  const [categories, setCategories] = useState([]);
-  const [settings, setSettings] = useState(null);
+  const { categories, settings } = useAppData();
   const [menuOpen, setMenuOpen] = useState(false);
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    api
-      .get("/categories")
-      .then((res) => setCategories(res.data))
-      .catch(() => setCategories([]));
-    api
-      .get("/settings")
-      .then((res) => setSettings(res.data))
-      .catch(() => setSettings(null));
-  }, []);
 
   // Close the drawer whenever the route changes (e.g. after tapping a link).
   useEffect(() => {

@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import PageLoader from "./PageLoader";
 import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar, { NAV_ITEMS } from "./Sidebar";
@@ -54,7 +56,10 @@ export default function AdminLayout() {
         <AdminTopBar title={getPageTitle(location.pathname)} onOpenSidebar={() => setSidebarOpen(true)} />
         <SessionTimeoutWarning />
         <main className="p-4 sm:p-6">
-          <Outlet />
+          {/* Pages are lazy-loaded (App.jsx) - show a spinner in the content area meanwhile */}
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

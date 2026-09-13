@@ -7,6 +7,7 @@ const User = require("../models/User");
 const { decorateWithOffers } = require("../utils/productPricing");
 const { isFullyOutOfStock, notifyIfBackInStock } = require("../utils/notifyStock");
 const { sendWhatsAppBroadcast } = require("../utils/whatsappService");
+const { parsePagination, paginatedResponse, MAX_LIMIT } = require("../utils/pagination");
 
 /**
  * @route   GET /api/products
@@ -15,30 +16,50 @@ const { sendWhatsAppBroadcast } = require("../utils/whatsappService");
  *            ?search=<text>           search name/description
  *            ?ids=<id,id,id>          fetch specific products (used to resolve a
  *                                     guest's localStorage wishlist into products)
+ *            ?page=&limit=            pagination (default 20 per page, max 100)
+ *          Returns { data, page, limit, totalPages, totalCount }.
  * @access  Public
  */
 const getProducts = async (req, res) => {
   const filter = { isActive: true };
+  const { category, search } = req.query;
 
-  if (req.query.category) {
-    filter.category = req.query.category;
+  // Query values can arrive as arrays (?category=a&category=b) or objects (?category[x]=y),
+  // not just strings - only accept exactly the type each filter expects (audit M1).
+  if (category !== undefined && category !== "") {
+    if (typeof category !== "string" || !mongoose.isValidObjectId(category)) {
+      return res.status(400).json({ message: "Invalid category" });
+    }
+    filter.category = category;
   }
-  if (req.query.search) {
-    filter.$text = { $search: req.query.search };
+  if (search !== undefined && search !== "") {
+    if (typeof search !== "string" || search.length > 100) {
+      return res.status(400).json({ message: "Invalid search" });
+    }
+    filter.$text = { $search: search };
   }
+  let defaultLimit;
   if (req.query.ids) {
     const ids = String(req.query.ids)
       .split(",")
       .map((id) => id.trim())
       .filter((id) => mongoose.isValidObjectId(id));
     filter._id = { $in: ids };
+    defaultLimit = Math.min(Math.max(ids.length, 1), MAX_LIMIT); // a wishlist comes back in one page
   }
 
-  const products = await Product.find(filter)
-    .populate("category", "name slug")
-    .sort({ createdAt: -1 });
+  const pagination = parsePagination(req.query, { defaultLimit });
+  // Only the requested page is populated and offer-priced, not the whole catalogue.
+  const [products, totalCount] = await Promise.all([
+    Product.find(filter)
+      .populate("category", "name slug")
+      .sort({ createdAt: -1, _id: -1 }) // _id tie-breaker keeps pages stable
+      .skip(pagination.skip)
+      .limit(pagination.limit),
+    Product.countDocuments(filter),
+  ]);
 
-  res.json(await decorateWithOffers(products));
+  res.json(paginatedResponse(await decorateWithOffers(products), pagination, totalCount));
 };
 
 /**

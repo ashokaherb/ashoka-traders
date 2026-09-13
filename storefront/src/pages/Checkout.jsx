@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
+import { useAppData } from "../context/AppDataContext";
 import { loadRazorpayScript } from "../utils/loadRazorpay";
 
 const emptyAddress = {
@@ -25,12 +26,10 @@ export default function Checkout() {
   const [saveAddress, setSaveAddress] = useState(true);
   const [pincodeStatus, setPincodeStatus] = useState(""); // "", "looking-up", "found", "not-found"
 
-  // Placeholder values until the real settings load a moment later.
-  const [settings, setSettings] = useState({
-    freeShippingThreshold: 1000,
-    flatShippingFee: 49,
-    minimumOrderValue: 0,
-  });
+  // Shared store settings (AppDataContext). Placeholder values until they load - the
+  // authoritative calculation always happens again on the backend at order time.
+  const { settings: loadedSettings } = useAppData();
+  const settings = loadedSettings || { freeShippingThreshold: 1000, flatShippingFee: 49, minimumOrderValue: 0 };
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState(null); // { code, discount }
   const [couponError, setCouponError] = useState("");
@@ -51,12 +50,6 @@ export default function Checkout() {
       setAddress((prev) => ({ ...prev, ...user.address }));
     }
   }, [user]);
-
-  // Fetch the shipping rule once, just to preview it in the summary panel.
-  // The authoritative calculation always happens again on the backend at order time.
-  useEffect(() => {
-    api.get("/settings").then((res) => setSettings(res.data));
-  }, []);
 
   // Coupons the customer can pick from. Re-fetched if the subtotal changes, since that
   // decides which ones the cart qualifies for. Purely a convenience list - the backend

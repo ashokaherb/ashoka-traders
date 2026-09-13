@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Product = require("../models/Product");
 const Coupon = require("../models/Coupon");
 const Settings = require("../models/Settings");
@@ -36,15 +37,36 @@ async function resolveOrderPricing({ items, couponCode }) {
     throw new OrderValidationError("Cart is empty");
   }
 
+  // Ids must be real ObjectId strings - an object like { $ne: ... } would match some other
+  // product. Checked for every line before touching the database.
+  for (const cartItem of items) {
+    if (!cartItem || typeof cartItem.productId !== "string" || !mongoose.isValidObjectId(cartItem.productId)) {
+      throw new OrderValidationError("Invalid product in cart");
+    }
+    if (cartItem.variantId && (typeof cartItem.variantId !== "string" || !mongoose.isValidObjectId(cartItem.variantId))) {
+      throw new OrderValidationError("Invalid product option in cart");
+    }
+  }
+
+  // Everything pricing needs, fetched in parallel - and ALL cart products in ONE query
+  // (audit M5) instead of one findById per line. Variants live inside the product
+  // document, so this single fetch includes their prices and stock too.
+  // Offers are fetched once and reused for every line - this is also what makes an active
+  // sale banner's discount actually apply at checkout, not just on the product page.
+  const productIds = [...new Set(items.map((i) => i.productId))];
+  const [offers, products, settings, coupon] = await Promise.all([
+    getActiveOffers(),
+    Product.find({ _id: { $in: productIds } }),
+    getSettings(),
+    couponCode ? Coupon.findOne({ code: String(couponCode).trim().toUpperCase() }) : null,
+  ]);
+  const productsById = new Map(products.map((p) => [p._id.toString(), p]));
+
   const resolvedItems = [];
   let subtotal = 0;
 
-  // Fetched once and reused for every line - this is also what makes an active sale
-  // banner's discount actually apply at checkout, not just on the product page.
-  const offers = await getActiveOffers();
-
   for (const cartItem of items) {
-    const product = await Product.findById(cartItem.productId);
+    const product = productsById.get(cartItem.productId);
     if (!product || !product.isActive) {
       throw new OrderValidationError(`Product not found or unavailable: ${cartItem.productId}`);
     }
@@ -97,7 +119,6 @@ async function resolveOrderPricing({ items, couponCode }) {
   let discount = 0;
   let appliedCouponCode = null;
   if (couponCode) {
-    const coupon = await Coupon.findOne({ code: String(couponCode).trim().toUpperCase() });
     const problem = couponProblem(coupon, subtotal);
     if (problem) throw new OrderValidationError(problem);
     discount = couponDiscount(coupon, subtotal);
@@ -106,7 +127,6 @@ async function resolveOrderPricing({ items, couponCode }) {
 
   // --- Shipping ---
   // Free above the threshold (checked against subtotal, before discount), else a flat fee.
-  const settings = await getSettings();
   const shippingFee = subtotal >= settings.freeShippingThreshold ? 0 : settings.flatShippingFee;
 
   // --- Minimum order value ---

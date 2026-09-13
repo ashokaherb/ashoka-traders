@@ -11,17 +11,47 @@ const statusColor = {
   Cancelled: "bg-red-100 text-red-700",
 };
 
+// Orders load 10 at a time with "Load More" (audit M3) - most customers only need the latest few.
+const PAGE_SIZE = 10;
+
 export default function MyOrders() {
   const [orders, setOrders] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const fetchPage = (pageNumber) =>
+    api.get("/orders/my", { params: { page: pageNumber, limit: PAGE_SIZE } }).then((res) => {
+      setPage(res.data.page);
+      setTotalPages(res.data.totalPages);
+      setTotalCount(res.data.totalCount);
+      return res.data.data;
+    });
 
   useEffect(() => {
-    api
-      .get("/orders/my")
-      .then((res) => setOrders(res.data))
+    fetchPage(1)
+      .then(setOrders)
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const next = await fetchPage(page + 1);
+      setOrders((prev) => {
+        const seen = new Set(prev.map((o) => o._id));
+        return [...prev, ...next.filter((o) => !seen.has(o._id))];
+      });
+    } catch {
+      // Button stays so they can retry.
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   // The invoice route requires an auth header, so it can't be a plain <a href> link -
   // fetch it as a blob and trigger the download ourselves.
@@ -104,6 +134,22 @@ export default function MyOrders() {
               )}
             </div>
           ))}
+
+          <div className="mt-2 flex flex-col items-center gap-2">
+            <p className="text-xs text-gray-500">
+              Showing {orders.length} of {totalCount} orders
+            </p>
+            {page < totalPages && (
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="bg-white border border-brand-600 text-brand-700 font-semibold rounded-full px-6 py-2 text-sm hover:bg-brand-600 hover:text-white disabled:opacity-60"
+              >
+                {loadingMore ? "Loading..." : "Load More"}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

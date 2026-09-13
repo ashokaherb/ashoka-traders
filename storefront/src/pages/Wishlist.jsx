@@ -31,7 +31,7 @@ export default function Wishlist() {
           if (!cancelled) setProducts(data);
         } else if (wishlistIds.length > 0) {
           const { data } = await api.get("/products", { params: { ids: wishlistIds.join(",") } });
-          if (!cancelled) setProducts(data);
+          if (!cancelled) setProducts(data.data); // paginated shape - all requested ids come back in one page
         } else if (!cancelled) {
           setProducts([]);
         }

@@ -147,5 +147,7 @@ productSchema.pre("save", async function (next) {
 
 // Basic text index so search (?search=) can match name/description
 productSchema.index({ name: "text", description: "text" });
+// Shop/category pages: find({ category, isActive: true }) (audit M2).
+productSchema.index({ category: 1, isActive: 1 });
 
 module.exports = mongoose.model("Product", productSchema);

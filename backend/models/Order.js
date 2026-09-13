@@ -80,6 +80,13 @@ orderSchema.index(
   { unique: true, partialFilterExpression: { razorpayPaymentId: { $type: "string" } } }
 );
 
+// Query indexes (audit M2) - without these every lookup below scans the whole collection.
+// "My Orders": find({ user }).sort({ createdAt: -1 }) - one index serves filter AND sort.
+orderSchema.index({ user: 1, createdAt: -1 });
+// Admin order list, CSV export date range, dashboard today/week/month counts + revenue trend.
+orderSchema.index({ createdAt: -1 });
+// (No orderStatus index: nothing filters orders by status yet - add one if that changes.)
+
 // A bill number can never be issued twice (null for orders without one, hence partial).
 orderSchema.index(
   { billNumber: 1 },

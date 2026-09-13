@@ -2,6 +2,8 @@ const User = require("../models/User");
 const generateToken = require("../utils/generateToken");
 const { MAX_SESSION_SECONDS } = require("../utils/generateToken");
 
+const areStrings = (...values) => values.every((v) => typeof v === "string");
+
 /**
  * @route   POST /api/auth/register
  * @desc    Register a new customer account
@@ -12,6 +14,11 @@ const registerUser = async (req, res) => {
 
   if (!name || !email || !password) {
     return res.status(400).json({ message: "Name, email and password are required" });
+  }
+  // Must be plain strings - an object here would turn User.findOne({ email }) into an
+  // operator query (audit M1).
+  if (!areStrings(name, email, password)) {
+    return res.status(400).json({ message: "Name, email and password must be text" });
   }
 
   const existingUser = await User.findOne({ email });
@@ -56,6 +63,11 @@ const loginUser = async (req, res) => {
 
   if (!email || !password) {
     return res.status(400).json({ message: "Email and password are required" });
+  }
+  // { "email": { "$gt": "" } } would match the FIRST user in the database - usually the
+  // admin - so anyone with just the password could log in (audit M1). Strings only.
+  if (!areStrings(email, password)) {
+    return res.status(400).json({ message: "Email and password must be text" });
   }
 
   // password has select:false on the schema, so we explicitly ask for it here
