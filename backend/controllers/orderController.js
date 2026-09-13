@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const Order = require("../models/Order");
+const PaymentIntent = require("../models/PaymentIntent");
 const razorpayInstance = require("../utils/razorpay");
 const { resolveOrderPricing, decrementStock, getSettings } = require("../utils/orderHelpers");
 const { sendOrderConfirmationEmail, sendAdminNewOrderAlert } = require("../utils/sendEmail");
@@ -96,10 +97,25 @@ const createRazorpayOrder = async (req, res) => {
     const { items, couponCode } = req.body;
     const pricing = await resolveOrderPricing({ items, couponCode });
 
+    const amountPaise = Math.round(pricing.total * 100); // Razorpay expects paise
     const razorpayOrder = await razorpayInstance.orders.create({
-      amount: Math.round(pricing.total * 100), // Razorpay expects paise
+      amount: amountPaise,
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
+    });
+
+    // Remember what THIS Razorpay order is supposed to cost. /verify builds the real Order
+    // from this record, so nothing the client sends later can change the items or price.
+    await PaymentIntent.create({
+      razorpayOrderId: razorpayOrder.id,
+      user: req.user._id,
+      items: pricing.resolvedItems,
+      subtotal: pricing.subtotal,
+      shippingFee: pricing.shippingFee,
+      discount: pricing.discount,
+      couponCode: pricing.appliedCouponCode,
+      total: pricing.total,
+      amountPaise,
     });
 
     res.json({
@@ -114,52 +130,151 @@ const createRazorpayOrder = async (req, res) => {
   }
 };
 
+// Security events get one consistent, greppable prefix so they're easy to find in the logs.
+const logTamper = (reason, details) => {
+  console.warn(`[PAYMENT TAMPER SUSPECTED] ${reason}`, JSON.stringify(details));
+};
+
+// "productId:variantId:quantity" per line, sorted - so two carts compare equal regardless of order.
+const cartFingerprint = (lines) =>
+  lines
+    .map((l) => `${l.product || l.productId}:${l.variantId || ""}:${Number(l.quantity)}`)
+    .sort()
+    .join("|");
+
 /**
  * @route   POST /api/orders/razorpay/verify
- * @desc    Verify the payment signature Razorpay's checkout handler returns, and only
- *          THEN create the Order, deduct stock, and send notification emails.
+ * @desc    Confirm a Razorpay payment and turn it into a real Order. Checks, in order:
+ *            1. HMAC signature           - Razorpay really issued this order_id + payment_id pair
+ *            2. Stored PaymentIntent     - what this Razorpay order was priced at, server-side
+ *            3. Razorpay's confirmed amount matches that stored price (fetched from Razorpay's API)
+ *            4. This payment id hasn't already been used for an order (replay protection)
+ *          The Order is built ONLY from the stored intent. Items/prices in the request body
+ *          are never used - if a client sends ones that differ, the request is rejected.
  * @access  Private
  */
 const verifyRazorpayPayment = async (req, res) => {
+  const {
+    razorpay_order_id: razorpayOrderId,
+    razorpay_payment_id: razorpayPaymentId,
+    razorpay_signature: razorpaySignature,
+    items,
+    address,
+  } = req.body;
+
+  if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+    return res.status(400).json({ message: "Missing Razorpay payment details" });
+  }
+  if (!address) {
+    return res.status(400).json({ message: "Shipping address is required" });
+  }
+  if (!razorpayInstance) {
+    return res.status(500).json({ message: "Razorpay is not configured on the server yet" });
+  }
+
+  // --- 1. Signature (unchanged) ---
+  // Recompute the expected signature ourselves - never trust the client's word that payment succeeded.
+  const expectedSignature = crypto
+    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+    .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+    .digest("hex");
+
+  if (expectedSignature !== razorpaySignature) {
+    return res.status(400).json({ message: "Payment verification failed" });
+  }
+
+  // --- 2. Look up what this Razorpay order was supposed to cost ---
+  const intent = await PaymentIntent.findOne({ razorpayOrderId });
+  if (!intent) {
+    return res.status(400).json({ message: "Unknown or expired payment session. Please contact support." });
+  }
+  if (intent.status === "consumed") {
+    return res.status(409).json({ message: "This payment has already been processed", orderId: intent.order });
+  }
+  if (intent.status === "flagged") {
+    // Already failed the amount check once - stays blocked until someone looks at it
+    return res.status(400).json({ message: "Payment could not be verified. Please contact support." });
+  }
+  if (intent.user.toString() !== req.user._id.toString()) {
+    logTamper("verify submitted by a different user than created the payment", {
+      razorpayOrderId, intentUser: intent.user, requestUser: req.user._id,
+    });
+    return res.status(403).json({ message: "This payment does not belong to your account" });
+  }
+
+  // The client has no reason to send a different cart than the one it just paid for.
+  // We'd never USE it anyway, but a mismatch means someone is probing - refuse and log it.
+  if (items !== undefined && (!Array.isArray(items) || cartFingerprint(items) !== cartFingerprint(intent.items))) {
+    logTamper("verify request items differ from the paid-for cart", {
+      razorpayOrderId, userId: req.user._id, paidFor: cartFingerprint(intent.items),
+      submitted: Array.isArray(items) ? cartFingerprint(items) : typeof items,
+    });
+    return res.status(400).json({ message: "Order details do not match the payment" });
+  }
+
+  // --- Claim the intent atomically ---
+  // Only one request can flip "created" -> "processing". A second identical request
+  // fired at the same moment finds nothing to claim, so it can't create a second order.
+  const claimed = await PaymentIntent.findOneAndUpdate(
+    { _id: intent._id, status: "created" },
+    { $set: { status: "processing" } },
+    { new: true }
+  );
+  if (!claimed) {
+    return res.status(409).json({ message: "This payment has already been processed" });
+  }
+
+  // If anything below fails for an ordinary reason (network, DB), release the claim
+  // so the customer - who HAS paid - can retry instead of being stuck.
+  const releaseClaim = () =>
+    PaymentIntent.updateOne({ _id: claimed._id, status: "processing" }, { $set: { status: "created" } });
+
   try {
-    const {
-      razorpay_order_id: razorpayOrderId,
-      razorpay_payment_id: razorpayPaymentId,
-      razorpay_signature: razorpaySignature,
-      items,
-      address,
-      couponCode,
-    } = req.body;
+    // --- 3. Ask Razorpay what was ACTUALLY paid ---
+    const payment = await razorpayInstance.payments.fetch(razorpayPaymentId);
 
-    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
-      return res.status(400).json({ message: "Missing Razorpay payment details" });
+    const problems = [];
+    if (payment.order_id !== razorpayOrderId) problems.push("payment belongs to a different order");
+    if (payment.amount !== claimed.amountPaise) problems.push("amount mismatch");
+    if (payment.currency !== "INR") problems.push("currency mismatch");
+    // "authorized" = money held, auto-captured shortly after (Razorpay's default setting)
+    if (!["captured", "authorized"].includes(payment.status)) problems.push(`payment status is "${payment.status}"`);
+
+    if (problems.length > 0) {
+      // Suspicious - do NOT silently correct. Freeze the intent (no TTL, never reusable)
+      // so it's still there when someone investigates.
+      await PaymentIntent.updateOne(
+        { _id: claimed._id },
+        { $set: { status: "flagged", razorpayPaymentId, expiresAt: null } }
+      );
+      logTamper(problems.join("; "), {
+        razorpayOrderId, razorpayPaymentId, userId: req.user._id,
+        expectedPaise: claimed.amountPaise, razorpayPaise: payment.amount,
+        razorpayStatus: payment.status, razorpayOrderIdOnPayment: payment.order_id,
+      });
+      return res.status(400).json({ message: "Payment could not be verified. Please contact support." });
     }
-    if (!address) {
-      return res.status(400).json({ message: "Shipping address is required" });
+
+    // --- 4. Replay protection ---
+    // Belt and braces with the unique index on Order.razorpayPaymentId (caught below).
+    const existing = await Order.findOne({ razorpayPaymentId }).select("_id");
+    if (existing) {
+      await releaseClaim();
+      return res.status(409).json({ message: "This payment has already been processed", orderId: existing._id });
     }
 
-    // Recompute the expected signature ourselves - never trust the client's word that payment succeeded.
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
-      .digest("hex");
-
-    if (expectedSignature !== razorpaySignature) {
-      return res.status(400).json({ message: "Payment verification failed" });
-    }
-
-    // Stock may have moved since the checkout popup opened - re-validate now.
-    const pricing = await resolveOrderPricing({ items, couponCode });
-
+    // Built from the STORED intent only - not from anything in req.body except the address.
+    // NOTE: stock is not re-checked here. The customer has already paid for these items;
+    // stock reservation is its own audit finding (C3).
     const order = await Order.create({
       user: req.user._id,
-      items: pricing.resolvedItems,
+      items: claimed.items,
       address,
-      subtotal: pricing.subtotal,
-      shippingFee: pricing.shippingFee,
-      discount: pricing.discount,
-      couponCode: pricing.appliedCouponCode,
-      total: pricing.total,
+      subtotal: claimed.subtotal,
+      shippingFee: claimed.shippingFee,
+      discount: claimed.discount,
+      couponCode: claimed.couponCode,
+      total: claimed.total,
       paymentMethod: "Razorpay",
       paymentStatus: "paid",
       orderStatus: "Placed",
@@ -167,13 +282,24 @@ const verifyRazorpayPayment = async (req, res) => {
       razorpayPaymentId,
     });
 
-    await decrementStock(pricing.resolvedItems);
+    // Burn the intent - it can never produce another order.
+    await PaymentIntent.updateOne(
+      { _id: claimed._id },
+      { $set: { status: "consumed", order: order._id, razorpayPaymentId } }
+    );
+
+    await decrementStock(claimed.items);
     notifyByEmail(req.user, order);
     notifyByWhatsApp(req.user, order);
 
-    res.status(201).json(order);
+    return res.status(201).json(order);
   } catch (error) {
-    res.status(error.statusCode || 500).json({ message: error.message || "Could not verify payment" });
+    if (error.code === 11000) {
+      // Unique index caught a replay that slipped past the findOne above
+      return res.status(409).json({ message: "This payment has already been processed" });
+    }
+    await releaseClaim();
+    throw error; // asyncHandler -> central error handler
   }
 };
 

@@ -68,4 +68,12 @@ const orderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Replay protection (audit C2): one Razorpay payment can only ever become ONE order.
+// "partial" so it only applies to real payment ids - every COD order has null here,
+// and a plain unique index would treat all those nulls as duplicates of each other.
+orderSchema.index(
+  { razorpayPaymentId: 1 },
+  { unique: true, partialFilterExpression: { razorpayPaymentId: { $type: "string" } } }
+);
+
 module.exports = mongoose.model("Order", orderSchema);
