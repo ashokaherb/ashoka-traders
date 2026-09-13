@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Environment files (never commit real secrets).
+# Ignore every .env variant, then explicitly un-ignore the .env.example templates
+# so new machines/collaborators still know which variables they need to set.
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+
+# User-uploaded/processed product images (see backend/utils/imageProcessing.js)
+backend/uploads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor/OS junk
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test/tooling output
+coverage/
+.vite/
+*.tsbuildinfo

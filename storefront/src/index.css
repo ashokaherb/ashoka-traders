@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global safety net against horizontal page overflow (e.g. an unbroken long string
+   somewhere forcing an element wider than the viewport). This doesn't fix the root
+   cause on its own - it just stops any one overflowing element from creating
+   sitewide horizontal scroll and visually splitting the fixed header - so also fix
+   the actual overflowing element (see ProductDetail.jsx's break-words) when found. */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+/* Hide the scrollbar on the horizontally-scrolling category strip (mobile) while
+   keeping it scrollable by touch/trackpad. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Scrolling marquee for the homepage offer banner (components/OfferBanner.jsx) */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+.animate-marquee {
+  animation: marquee 18s linear infinite;
+}
