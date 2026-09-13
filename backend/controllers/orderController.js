@@ -13,6 +13,7 @@ const {
 const { claimCouponUse } = require("../utils/couponRules");
 const { nextBillNumber, ensureBillNumber } = require("../utils/billNumber");
 const { parsePagination, paginatedResponse } = require("../utils/pagination");
+const { ORDER_STATUS_TRANSITIONS, canMoveOrderStatus } = require("../utils/orderStatus");
 const {
   sendOrderConfirmationEmail,
   sendAdminNewOrderAlert,
@@ -60,14 +61,8 @@ const notifyByWhatsApp = (user, order) => {
  * @access  Private
  */
 const createOrder = async (req, res) => {
-  const { items, address, couponCode, paymentMethod } = req.body;
-
-  if (paymentMethod !== "COD") {
-    return res.status(400).json({ message: "Use /api/orders/razorpay for online payment" });
-  }
-  if (!address) {
-    return res.status(400).json({ message: "Shipping address is required" });
-  }
+  // Validated by schemas.codOrder: cart lines, a complete address, paymentMethod "COD".
+  const { items, address, couponCode } = req.body;
 
   const pricing = await resolveOrderPricing({ items, couponCode });
 
@@ -186,12 +181,7 @@ const verifyRazorpayPayment = async (req, res) => {
     address,
   } = req.body;
 
-  if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
-    return res.status(400).json({ message: "Missing Razorpay payment details" });
-  }
-  if (!address) {
-    return res.status(400).json({ message: "Shipping address is required" });
-  }
+  // Payment ids, cart and address are validated by schemas.razorpayVerify before this runs.
   if (!razorpayInstance) {
     return res.status(500).json({ message: "Razorpay is not configured on the server yet" });
   }
@@ -533,8 +523,20 @@ const updateOrderStatus = async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ message: "Order not found" });
 
+  // Values are validated by schemas.orderStatusUpdate; the MOVE between statuses is checked here.
   const { orderStatus, trackingNumber, paymentStatus } = req.body;
-  if (orderStatus !== undefined) order.orderStatus = orderStatus;
+  if (orderStatus !== undefined && orderStatus !== order.orderStatus) {
+    if (!canMoveOrderStatus(order.orderStatus, orderStatus)) {
+      const allowed = ORDER_STATUS_TRANSITIONS[order.orderStatus] || [];
+      return res.status(400).json({
+        message:
+          `Cannot move from ${order.orderStatus} to ${orderStatus}.` +
+          (allowed.length ? ` Allowed next: ${allowed.join(" or ")}.` : ` ${order.orderStatus} is final.`),
+        code: "INVALID_STATUS_TRANSITION",
+      });
+    }
+    order.orderStatus = orderStatus;
+  }
   if (trackingNumber !== undefined) order.trackingNumber = trackingNumber;
   if (paymentStatus !== undefined) order.paymentStatus = paymentStatus;
 

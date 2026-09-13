@@ -1,4 +1,3 @@
-const mongoose = require("mongoose");
 const Product = require("../models/Product");
 const Coupon = require("../models/Coupon");
 const Settings = require("../models/Settings");
@@ -33,20 +32,8 @@ const getSettings = async () => {
  * @returns {{resolvedItems, subtotal, discount, appliedCouponCode, shippingFee, total}}
  */
 async function resolveOrderPricing({ items, couponCode }) {
-  if (!Array.isArray(items) || items.length === 0) {
-    throw new OrderValidationError("Cart is empty");
-  }
-
-  // Ids must be real ObjectId strings - an object like { $ne: ... } would match some other
-  // product. Checked for every line before touching the database.
-  for (const cartItem of items) {
-    if (!cartItem || typeof cartItem.productId !== "string" || !mongoose.isValidObjectId(cartItem.productId)) {
-      throw new OrderValidationError("Invalid product in cart");
-    }
-    if (cartItem.variantId && (typeof cartItem.variantId !== "string" || !mongoose.isValidObjectId(cartItem.variantId))) {
-      throw new OrderValidationError("Invalid product option in cart");
-    }
-  }
+  // `items` has already been validated by the route's schema (validation/schemas.js cartItems):
+  // 1-50 lines, ObjectId-string ids, whole-number quantities - never operator objects.
 
   // Everything pricing needs, fetched in parallel - and ALL cart products in ONE query
   // (audit M5) instead of one findById per line. Variants live inside the product
@@ -93,10 +80,7 @@ async function resolveOrderPricing({ items, couponCode }) {
     const offer = pickBestOffer(offers, product.category);
     unitPrice = applyDiscount(unitPrice, offer);
 
-    const quantity = Number(cartItem.quantity) || 0;
-    if (quantity <= 0) {
-      throw new OrderValidationError(`Invalid quantity for ${product.name}`);
-    }
+    const { quantity } = cartItem;
     if (quantity > availableStock) {
       throw new OrderValidationError(
         `Insufficient stock for ${product.name}${variantLabel ? ` (${variantLabel})` : ""}. Only ${availableStock} left.`

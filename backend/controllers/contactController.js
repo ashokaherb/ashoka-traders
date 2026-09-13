@@ -11,11 +11,8 @@ const { sendWhatsAppMessage } = require("../utils/whatsappService");
  * @access  Public (guests can contact support without an account)
  */
 const submitContactQuery = async (req, res) => {
+  // Validated by schemas.contact: name, a valid email and a message are required.
   const { name, email, phone, message } = req.body;
-
-  if (!name || !email || !message) {
-    return res.status(400).json({ message: "Name, email and message are required" });
-  }
 
   const query = { name, email, phone, message };
 

@@ -3,7 +3,15 @@ import { useParams, Link } from "react-router-dom";
 import api from "../api/axios";
 import { downloadBlob } from "../utils/downloadFile";
 
-const STATUS_OPTIONS = ["Placed", "Packed", "Shipped", "Delivered", "Cancelled"];
+// Which status can follow which - mirrors backend/utils/orderStatus.js, which enforces it.
+// The dropdown only offers the current status plus its allowed next steps.
+const STATUS_TRANSITIONS = {
+  Placed: ["Packed", "Cancelled"],
+  Packed: ["Shipped", "Cancelled"],
+  Shipped: ["Delivered"],
+  Delivered: [],
+  Cancelled: [],
+};
 // Actual refunds are processed by the client directly in the Razorpay dashboard - this
 // dropdown just lets the admin reflect that status back to the customer's "My Orders".
 const PAYMENT_STATUS_OPTIONS = ["pending", "paid", "refund_requested", "refunded"];
@@ -16,6 +24,7 @@ export default function OrderDetail() {
   const [trackingNumber, setTrackingNumber] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const load = () => {
     api.get(`/orders/${id}`).then((res) => {
@@ -37,12 +46,13 @@ export default function OrderDetail() {
     e.preventDefault();
     setSaving(true);
     setMessage("");
+    setError("");
     try {
       await api.put(`/orders/${id}/status`, { orderStatus, paymentStatus, trackingNumber });
       setMessage("Updated successfully");
       load();
     } catch (err) {
-      setMessage(err.response?.data?.message || "Update failed");
+      setError(err.response?.data?.message || "Update failed");
     } finally {
       setSaving(false);
     }
@@ -129,6 +139,7 @@ export default function OrderDetail() {
           <form onSubmit={handleSave} className="border-t pt-4 flex flex-col gap-3">
             <h2 className="font-semibold text-gray-700">Update Order</h2>
             {message && <p className="text-sm text-emerald-700">{message}</p>}
+            {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-gray-500">Order Status</label>
@@ -137,7 +148,7 @@ export default function OrderDetail() {
                   onChange={(e) => setOrderStatus(e.target.value)}
                   className="border rounded px-3 py-2 w-full"
                 >
-                  {STATUS_OPTIONS.map((s) => (
+                  {[order.orderStatus, ...(STATUS_TRANSITIONS[order.orderStatus] || [])].map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>

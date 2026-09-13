@@ -2,24 +2,15 @@ const User = require("../models/User");
 const generateToken = require("../utils/generateToken");
 const { MAX_SESSION_SECONDS } = require("../utils/generateToken");
 
-const areStrings = (...values) => values.every((v) => typeof v === "string");
-
 /**
  * @route   POST /api/auth/register
- * @desc    Register a new customer account
+ * @desc    Register a new customer account. Body is validated by schemas.register
+ *          (valid email, 6+ character password, optional Indian mobile numbers) - so
+ *          every value here is a clean string, never an operator object (audit M1/L1).
  * @access  Public
  */
 const registerUser = async (req, res) => {
   const { name, email, password, phone, whatsappOptIn, whatsappNumber } = req.body;
-
-  if (!name || !email || !password) {
-    return res.status(400).json({ message: "Name, email and password are required" });
-  }
-  // Must be plain strings - an object here would turn User.findOne({ email }) into an
-  // operator query (audit M1).
-  if (!areStrings(name, email, password)) {
-    return res.status(400).json({ message: "Name, email and password must be text" });
-  }
 
   const existingUser = await User.findOne({ email });
   if (existingUser) {
@@ -59,16 +50,9 @@ const registerUser = async (req, res) => {
  * @access  Public
  */
 const loginUser = async (req, res) => {
+  // schemas.login guarantees both are strings: { "email": { "$gt": "" } } would otherwise
+  // match the FIRST user in the database - usually the admin (audit M1).
   const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password are required" });
-  }
-  // { "email": { "$gt": "" } } would match the FIRST user in the database - usually the
-  // admin - so anyone with just the password could log in (audit M1). Strings only.
-  if (!areStrings(email, password)) {
-    return res.status(400).json({ message: "Email and password must be text" });
-  }
 
   // password has select:false on the schema, so we explicitly ask for it here
   const user = await User.findOne({ email }).select("+password");
@@ -138,6 +122,7 @@ const refreshToken = async (req, res) => {
  * @desc    Save/update the logged-in customer's address, for reuse at future checkouts
  * @access  Private
  */
+// Body validated by schemas.address (6-digit pincode, valid mobile number, length limits).
 const updateAddress = async (req, res) => {
   const { name, phone, addressLine, pincode, city, state, landmark } = req.body;
 

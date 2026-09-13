@@ -169,11 +169,7 @@ const createProduct = async (req, res) => {
     isNewArrival,
     rating,
     reviewCount,
-  } = req.body;
-
-  if (!name || price === undefined || !category) {
-    return res.status(400).json({ message: "name, price and category are required" });
-  }
+  } = req.body; // validated by schemas.productCreate (name, price and category required)
 
   const product = await Product.create({
     name,

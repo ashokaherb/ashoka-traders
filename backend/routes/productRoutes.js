@@ -16,6 +16,8 @@ const {
 } = require("../controllers/productController");
 const { protect, admin } = require("../middleware/auth");
 const asyncHandler = require("../middleware/asyncHandler");
+const validate = require("../middleware/validate");
+const schemas = require("../validation/schemas");
 
 // CSV/image files are small - keep uploads in memory rather than writing to disk first.
 const upload = multer({ storage: multer.memoryStorage() });
@@ -28,9 +30,9 @@ router.get("/:id/related", asyncHandler(getRelatedProducts)); // 2-segment path,
 router.get("/:id", asyncHandler(getProductById));
 
 // Admin-only writes
-router.post("/", protect, admin, asyncHandler(createProduct));
+router.post("/", protect, admin, validate(schemas.productCreate), asyncHandler(createProduct));
 router.post("/bulk-upload", protect, admin, upload.single("file"), asyncHandler(bulkUploadProducts));
-router.put("/:id", protect, admin, asyncHandler(updateProduct));
+router.put("/:id", protect, admin, validate(schemas.productUpdate), asyncHandler(updateProduct));
 router.delete("/:id", protect, admin, asyncHandler(deleteProduct));
 router.post("/:id/broadcast-new-arrival", protect, admin, asyncHandler(broadcastNewArrival));
 

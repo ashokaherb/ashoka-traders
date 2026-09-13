@@ -56,18 +56,14 @@ const getAvailableCoupons = async (req, res) => {
 
 // --- Admin CRUD ---
 
-// Only these fields come from the admin form. usedCount is deliberately missing - it's
-// only changed by placing orders, so the "times used" figure can be trusted.
+// Picks only the editable coupon fields out of the (already validated) body. Never copies
+// req.body wholesale (audit L2): usedCount, _id, timestamps etc. can't be set from the admin
+// form - usedCount only changes when orders are placed, so "times used" can be trusted.
+const EDITABLE_COUPON_FIELDS = ["code", "discountType", "value", "expiryDate", "minOrderValue", "usageLimit", "active"];
 function pickCouponFields(body) {
   const fields = {};
-  if (body.code !== undefined) fields.code = body.code;
-  if (body.discountType !== undefined) fields.discountType = body.discountType;
-  if (body.value !== undefined) fields.value = body.value;
-  if (body.active !== undefined) fields.active = body.active;
-  if (body.expiryDate !== undefined) fields.expiryDate = body.expiryDate || null;
-  if (body.minOrderValue !== undefined) fields.minOrderValue = Number(body.minOrderValue) || 0;
-  if (body.usageLimit !== undefined) {
-    fields.usageLimit = body.usageLimit === "" || body.usageLimit === null ? null : Number(body.usageLimit);
+  for (const key of EDITABLE_COUPON_FIELDS) {
+    if (body[key] !== undefined) fields[key] = body[key];
   }
   return fields;
 }
@@ -92,7 +88,7 @@ const updateCoupon = async (req, res) => {
   const coupon = await Coupon.findById(req.params.id);
   if (!coupon) return res.status(404).json({ message: "Coupon not found" });
 
-  Object.assign(coupon, pickCouponFields(req.body));
+  coupon.set(pickCouponFields(req.body));
   try {
     res.json(await coupon.save());
   } catch (error) {
