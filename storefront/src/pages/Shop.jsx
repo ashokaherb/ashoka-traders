@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
-import { Helmet } from "react-helmet-async";
 import api from "../api/axios";
+import Seo from "../components/Seo";
+import Breadcrumbs from "../components/Breadcrumbs";
+import { SITE } from "../seo/siteConfig";
+import { breadcrumbSchema } from "../seo/structuredData";
 import { useAppData } from "../context/AppDataContext";
 import CategoryFilter from "../components/CategoryFilter";
 import ProductGrid from "../components/ProductGrid";
@@ -113,24 +116,46 @@ export default function Shop() {
   };
 
   const heading = selectedCategory ? selectedCategory.name : search ? "Search results" : "All Products";
+
+  // ---- SEO -----------------------------------------------------------------
+  // Category pages are the main organic landing pages ("buy dry fruits online"), so they
+  // get the keyword-first title pattern and a description naming real products from the
+  // category - taken from the loaded list, never invented.
+  const popularNames = products.slice(0, 3).map((p) => p.name);
+  const popularPhrase = popularNames.length
+    ? ` Including ${popularNames.join(", ")}.`
+    : "";
+
   const pageTitle = selectedCategory
-    ? `${selectedCategory.name} - Ashoka Traders`
+    ? `${selectedCategory.name} — Buy Online | ${SITE.name}`
     : search
-      ? `Search: ${search} - Ashoka Traders`
-      : "Shop All Products - Ashoka Traders";
+      ? `Search: ${search} | ${SITE.name}`
+      : `Shop All Products — Dry Fruits, Herbs & Spices | ${SITE.name}`;
+
   const pageDescription = selectedCategory
-    ? `Shop ${selectedCategory.name} at Ashoka Traders - quality products, fast delivery, cash on delivery available.`
-    : "Browse the full range of dry fruits, herbs and everyday essentials at Ashoka Traders.";
+    ? `Buy ${selectedCategory.name.toLowerCase()} online at ${SITE.name}, Dehradun.${popularPhrase} Fresh stock, fair prices, delivery across India with cash on delivery.`
+    : search
+      ? `Search results for "${search}" at ${SITE.name}.`
+      : `Browse the full range of dry fruits, herbs, spices and natural grocery at ${SITE.name}. Delivered across India, cash on delivery available.`;
+
+  const trail = selectedCategory
+    ? [{ name: "Home", path: "/" }, { name: "Shop", path: "/shop" }, { name: selectedCategory.name }]
+    : [];
 
   return (
     <div className="bg-cream min-h-screen">
-      <Helmet>
-        <title>{pageTitle}</title>
-        <meta name="description" content={pageDescription} />
-      </Helmet>
+      <Seo
+        title={pageTitle}
+        description={pageDescription}
+        /* Search result pages are thin and endless in number: crawl, but don't index. */
+        noindex={Boolean(search)}
+        jsonLd={breadcrumbSchema(trail)}
+      />
 
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-6">
         <div className="mb-4">
+          {/* Visible trail - the BreadcrumbList schema above is built from the same array */}
+          {trail.length > 0 && <Breadcrumbs trail={trail} />}
           <h1 className="text-xl sm:text-2xl font-bold text-brand-700 tracking-tight">{heading}</h1>
           {selectedCategory?.description && (
             <p className="text-sm text-gray-500 mt-1 max-w-full break-words">

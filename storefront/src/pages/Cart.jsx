@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { getCloudinaryThumbnail } from "../utils/cloudinary";
+import Seo from "../components/Seo";
 
 export default function Cart() {
   const { items, updateQuantity, removeItem, subtotal } = useCart();
@@ -20,6 +21,7 @@ export default function Cart() {
   if (items.length === 0) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-10 text-center">
+        <Seo title="Your Cart | Ashoka Traders" description="Review the items in your cart before checkout." noindex />
         <p className="text-gray-500 mb-4">Your cart is empty.</p>
         <Link to="/" className="text-brand-700 font-medium">
           Continue shopping &rarr;
@@ -30,6 +32,8 @@ export default function Cart() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
+      {/* A personal cart has no value in search results (and is disallowed in robots.txt) */}
+      <Seo title="Your Cart | Ashoka Traders" description="Review the items in your cart before checkout." noindex />
       <h1 className="text-xl font-bold text-gray-800 mb-4">Your Cart</h1>
 
       <div className="bg-white rounded-lg shadow-sm divide-y">

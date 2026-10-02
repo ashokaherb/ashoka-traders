@@ -1,5 +1,6 @@
 import { useState } from "react";
 import api from "../api/axios";
+import Seo from "../components/Seo";
 
 // This page is also linked from "My Orders" and the Returns page for customers who
 // need to cancel an order or report an issue. The form at the bottom alerts the
@@ -25,6 +26,11 @@ export default function ContactUs() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
+      <Seo
+        title="Contact Us | Ashoka Traders"
+        description="Call, WhatsApp, email or message Ashoka Traders, Dehradun - for orders, cancellations, delivery questions and bulk enquiries."
+      />
+
       <div className="bg-white rounded-lg shadow-sm p-8">
         <h1 className="text-2xl font-bold text-gray-800 mb-4">Contact Us</h1>
         <p className="text-gray-600 leading-relaxed mb-6">

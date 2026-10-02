@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useAppData } from "../context/AppDataContext";
 import { loadRazorpayScript } from "../utils/loadRazorpay";
+import Seo from "../components/Seo";
 
 const emptyAddress = {
   name: "",
@@ -203,6 +204,8 @@ export default function Checkout() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 grid md:grid-cols-3 gap-6">
+      {/* Transaction page - never indexed */}
+      <Seo title="Checkout | Ashoka Traders" description="Confirm your delivery address and place your order." noindex />
       <form
         onSubmit={handlePlaceOrder}
         className="md:col-span-2 bg-white rounded-lg shadow-sm p-6 flex flex-col gap-4"
@@ -324,6 +327,22 @@ export default function Checkout() {
         >
           {submitting ? "Placing order..." : belowMinimum ? "Add more to checkout" : `Place Order - ₹${total}`}
         </button>
+
+        <p className="text-xs text-gray-500 text-center">
+          By placing this order you agree to our{" "}
+          <Link to="/terms" className="underline hover:text-brand-700">
+            Terms &amp; Conditions
+          </Link>
+          ,{" "}
+          <Link to="/shipping" className="underline hover:text-brand-700">
+            Shipping Policy
+          </Link>{" "}
+          and{" "}
+          <Link to="/returns" className="underline hover:text-brand-700">
+            Cancellation &amp; Returns Policy
+          </Link>
+          .
+        </p>
       </form>
 
       <div className="bg-white rounded-lg shadow-sm p-6 h-fit">

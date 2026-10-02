@@ -7,7 +7,50 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>Ashoka Traders — Natural Herbs &amp; Dry Fruits</title>
+
+    <!--
+      Every page also sets its own title/description/canonical/Open Graph tags at runtime
+      through <Seo> (react-helmet-async). The tags below are the STATIC fallback, and they
+      matter more than they look: WhatsApp, Facebook and most chat apps read the raw HTML
+      without running JavaScript, so a product link shared in a WhatsApp broadcast falls
+      back to exactly this card. Google does run JavaScript, so it sees the per-page tags.
+      (To get per-product WhatsApp previews, the site needs prerendering/SSR - see README.)
+    -->
+    <title data-rh="true">Ashoka Traders — Buy Dry Fruits, Herbs &amp; Natural Grocery Online</title>
+    <meta
+      data-rh="true"
+      name="description"
+      content="Buy premium dry fruits, herbs, spices and natural grocery online from Ashoka Traders, Dehradun. Honest quality, fair prices and delivery across India with cash on delivery."
+    />
+    <link data-rh="true" rel="canonical" href="https://ashokaherbs.com/" />
+    <meta data-rh="true" name="robots" content="index, follow, max-image-preview:large" />
+
+    <meta data-rh="true" property="og:type" content="website" />
+    <meta data-rh="true" property="og:site_name" content="Ashoka Traders" />
+    <meta data-rh="true" property="og:title" content="Ashoka Traders — Buy Dry Fruits, Herbs &amp; Natural Grocery Online" />
+    <meta
+      data-rh="true"
+      property="og:description"
+      content="Premium dry fruits, herbs, spices and natural grocery from Dehradun, delivered across India. Cash on delivery available."
+    />
+    <meta data-rh="true" property="og:url" content="https://ashokaherbs.com/" />
+    <meta data-rh="true" property="og:image" content="https://ashokaherbs.com/og-image.png" />
+    <meta data-rh="true" property="og:image:width" content="1200" />
+    <meta data-rh="true" property="og:image:height" content="630" />
+    <meta data-rh="true" property="og:locale" content="en_IN" />
+
+    <meta data-rh="true" name="twitter:card" content="summary_large_image" />
+    <meta data-rh="true" name="twitter:title" content="Ashoka Traders — Buy Dry Fruits, Herbs &amp; Natural Grocery Online" />
+    <meta
+      data-rh="true"
+      name="twitter:description"
+      content="Premium dry fruits, herbs, spices and natural grocery from Dehradun, delivered across India."
+    />
+    <meta data-rh="true" name="twitter:image" content="https://ashokaherbs.com/og-image.png" />
+
+    <!-- Product images come from Cloudinary: warm the connection before React asks for one. -->
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin />
+    <link rel="dns-prefetch" href="https://res.cloudinary.com" />
   </head>
   <body>
     <div id="root"></div>

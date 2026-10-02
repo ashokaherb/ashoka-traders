@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Helmet } from "react-helmet-async";
 import api from "../api/axios";
+import Seo from "../components/Seo";
+import { SITE } from "../seo/siteConfig";
+import { organizationSchema, localBusinessSchema, websiteSchema } from "../seo/structuredData";
 import { useAppData } from "../context/AppDataContext";
 import useMediaQuery, { LG_BREAKPOINT } from "../hooks/useMediaQuery";
 import OfferBanner from "../components/OfferBanner";
@@ -52,13 +54,14 @@ export default function Home() {
 
   return (
     <div className="bg-cream min-h-screen">
-      <Helmet>
-        <title>{`${storeName} — Natural Herbs & Dry Fruits`}</title>
-        <meta
-          name="description"
-          content={`${storeName} - premium dry fruits, herbs and everyday essentials delivered across India. Cash on delivery available.`}
-        />
-      </Helmet>
+      {/* Homepage SEO: the niche keywords in the title, plus the three site-wide schema
+          blocks (business, physical shop, search box) - emitted here only. */}
+      <Seo
+        title={`${storeName} — ${SITE.tagline}`}
+        description={SITE.description}
+        canonicalPath="/"
+        jsonLd={[organizationSchema(settings), localBusinessSchema(settings), websiteSchema(settings)]}
+      />
 
       <OfferBanner />
 

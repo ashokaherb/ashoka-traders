@@ -1,6 +1,5 @@
 import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
-import { Helmet } from "react-helmet-async";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import RequireAuth from "./components/RequireAuth";
@@ -27,19 +26,15 @@ const ContactUs = lazy(() => import("./pages/ContactUs"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Returns = lazy(() => import("./pages/Returns"));
+const Shipping = lazy(() => import("./pages/Shipping"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-cream">
-      {/* Site-wide default title/description - individual pages override these with
-          their own <Helmet> (react-helmet-async merges, most specific wins). */}
-      <Helmet>
-        <title>Ashoka Traders — Natural Herbs &amp; Dry Fruits</title>
-        <meta
-          name="description"
-          content="Ashoka Traders - your local shop for premium dry fruits, herbs and everyday essentials, now online. Fast delivery, cash on delivery available."
-        />
-      </Helmet>
+      {/* The site-wide default title/description/Open Graph tags now live in index.html
+          (marked data-rh so <Seo> can take them over per page). They have to be static:
+          WhatsApp and other link-preview crawlers never run this JavaScript. */}
 
       {/* Storefront-only GA4 tracking - never mounted in the admin app */}
       <GoogleAnalytics />
@@ -101,6 +96,10 @@ export default function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/returns" element={<Returns />} />
+          <Route path="/shipping" element={<Shipping />} />
+
+          {/* Anything else: a real 404 page rather than an empty layout */}
+          <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </div>

@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import { Helmet } from "react-helmet-async";
+import NotFound from "./NotFound";
+import { useParams, useNavigate } from "react-router-dom";
 import api from "../api/axios";
+import Seo from "../components/Seo";
+import Breadcrumbs from "../components/Breadcrumbs";
+import { useAppData } from "../context/AppDataContext";
+import { productSchema, breadcrumbSchema } from "../seo/structuredData";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import WishlistButton from "../components/WishlistButton";
@@ -12,6 +16,7 @@ export default function ProductDetail() {
   const navigate = useNavigate();
   const { addItem } = useCart();
   const { user } = useAuth();
+  const { settings } = useAppData();
 
   const [product, setProduct] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
@@ -42,8 +47,9 @@ export default function ProductDetail() {
   }, [selectedVariant]);
 
   if (loading) return <p className="text-center mt-10 text-gray-500">Loading...</p>;
-  if (error || !product)
-    return <p className="text-center mt-10 text-red-500">{error || "Not found"}</p>;
+  // A product that doesn't exist (or was removed) gets the normal 404 page, with links back
+  // into the shop - not a bare error line.
+  if (error || !product) return <NotFound />;
 
   // effectivePrice/originalPrice come from the backend's offer decoration - equal
   // unless an active sale applies (see backend/utils/productPricing.js).
@@ -53,11 +59,31 @@ export default function ProductDetail() {
   const hasDiscount = displayPrice < originalPrice;
   const image = product.images?.[0] || "https://placehold.co/500x500?text=No+Image";
 
-  // A short, plain-text description for the <meta name="description"> tag (SEO) -
-  // strip to ~155 chars, the point search engines typically truncate at anyway.
-  const metaDescription = product.description
-    ? product.description.slice(0, 155)
-    : `Buy ${product.name} online at Ashoka Traders.`;
+  // ---- SEO -----------------------------------------------------------------
+  // Description = the product's own words, trimmed to ~155 characters (where search
+  // engines truncate), followed by the real price and an availability hint so the snippet
+  // answers "how much?" and "can I buy it?" without a click.
+  const availabilityHint = displayStock > 0 ? "In stock" : "Currently out of stock";
+  const descriptionBody = (product.description || `Buy ${product.name} online at Ashoka Traders.`)
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 155);
+  const metaDescription = `${descriptionBody} ₹${displayPrice} — ${availabilityHint}. Delivered across India.`;
+
+  // Descriptive alt text: product name + the chosen pack size, never an empty alt or a
+  // file name (both are invisible to image search and to screen readers).
+  const imageAlt = [product.name, selectedVariant?.label, product.category?.name]
+    .filter(Boolean)
+    .join(" - ");
+
+  // Visible trail and BreadcrumbList schema, from one array (Google requires them to agree)
+  const trail = [
+    { name: "Home", path: "/" },
+    ...(product.category
+      ? [{ name: product.category.name, path: `/category/${product.category.slug}` }]
+      : [{ name: "Shop", path: "/shop" }]),
+    { name: product.name },
+  ];
 
   const handleAddToCart = () => {
     addItem(
@@ -85,14 +111,19 @@ export default function ProductDetail() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
-      <Helmet>
-        <title>{product.name} - Ashoka Traders</title>
-        <meta name="description" content={metaDescription} />
-      </Helmet>
+      <Seo
+        title={`${product.name} — Buy Online | Ashoka Traders`}
+        description={metaDescription}
+        canonicalPath={`/product/${product.slug}`}
+        type="product"
+        image={image}
+        jsonLd={[
+          productSchema(product, { price: displayPrice, stock: displayStock, settings }),
+          breadcrumbSchema(trail),
+        ]}
+      />
 
-      <Link to="/" className="text-sm text-brand-700">
-        &larr; Back to products
-      </Link>
+      <Breadcrumbs trail={trail} />
 
       {/* min-w-0 on both grid children - without it, a grid item's default min-width
           is "auto", which lets long unbreakable content (e.g. one giant word in the
@@ -101,7 +132,7 @@ export default function ProductDetail() {
       <div className="mt-4 bg-white rounded-lg shadow-sm p-6 grid md:grid-cols-2 gap-6">
         <div className="relative min-w-0">
           {/* Not lazy-loaded - this is the largest above-the-fold image on the page */}
-          <img src={image} alt={product.name} loading="eager" className="w-full rounded-lg object-cover" />
+          <img src={image} alt={imageAlt} loading="eager" className="w-full rounded-lg object-cover" />
           <WishlistButton
             productId={product._id}
             className="absolute top-2 right-2 bg-white/90 rounded-full w-9 h-9 text-xl flex items-center justify-center"

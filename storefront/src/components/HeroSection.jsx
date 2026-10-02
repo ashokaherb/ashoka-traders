@@ -21,6 +21,8 @@ const HERO = {
   // Real product photo, provided in src/assets and compressed to webp on the way in
   // (originals were a 474KB PNG-labelled JPEG and a 2.1MB PNG - see note below).
   image: heroImage,
+  // Describes the photo for image search and screen readers (it is content, not decoration)
+  imageAlt: "Assorted premium dry fruits, nuts and natural herbs from Ashoka Traders",
 };
 
 export default function HeroSection({ storeName }) {
@@ -54,7 +56,7 @@ export default function HeroSection({ storeName }) {
         <div className="relative">
           <img
             src={HERO.image}
-            alt=""
+            alt={HERO.imageAlt}
             className="w-full rounded-2xl object-cover shadow-md"
             loading="eager"
           />
