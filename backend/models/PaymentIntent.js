@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const addressSchema = require("./addressSchema");
 
 /**
  * The server's record of what ONE Razorpay order is supposed to cost.
@@ -47,9 +48,15 @@ const paymentIntentSchema = new mongoose.Schema(
     total: { type: Number, required: true },
     amountPaise: { type: Number, required: true }, // exactly what Razorpay was told to charge
 
+    // Where the order will ship. Saved up front so the Razorpay WEBHOOK can still create the
+    // order if the customer's browser never comes back to confirm the payment.
+    address: { type: addressSchema, default: undefined },
+
     status: {
       type: String,
-      enum: ["created", "processing", "consumed", "flagged", "needs_refund"],
+      // needs_manual: paid and genuine, but something is missing (e.g. no address) and
+      // an admin has to finish the order by hand.
+      enum: ["created", "processing", "consumed", "flagged", "needs_refund", "needs_manual"],
       default: "created",
     },
     order: { type: mongoose.Schema.Types.ObjectId, ref: "Order", default: null }, // set once consumed

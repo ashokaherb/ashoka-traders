@@ -150,6 +150,44 @@ const sendAdminRefundRequiredAlert = async (order, { user, reason }) => {
   });
 };
 
+/**
+ * Sent when the Razorpay webhook confirms a payment that could NOT be turned into an order
+ * automatically - e.g. the payment session has no shipping address because the customer's
+ * browser never came back. The money has been taken, so this needs a person.
+ */
+const sendAdminManualOrderAlert = async ({ intent, user, razorpayPaymentId }) => {
+  const items = (intent.items || [])
+    .map((i) => `  - ${i.name}${i.variantLabel ? ` (${i.variantLabel})` : ""} x${i.quantity} - Rs.${i.price * i.quantity}`)
+    .join("\n");
+  await sendMail({
+    to: process.env.ADMIN_EMAIL,
+    subject: `[Action Needed] Paid order needs to be completed by hand - ${razorpayPaymentId}`,
+    text: [
+      "Razorpay confirmed a payment, but the order could not be created automatically because",
+      "the payment session has no shipping address (the customer's browser never confirmed it).",
+      "",
+      "PAYMENT",
+      `  Amount:              Rs.${intent.total}`,
+      `  Razorpay payment ID: ${razorpayPaymentId}`,
+      `  Razorpay order ID:   ${intent.razorpayOrderId}`,
+      "",
+      "CUSTOMER",
+      `  Name:  ${user.name}`,
+      `  Email: ${user.email}`,
+      `  Phone: ${user.phone || "-"}`,
+      "",
+      "ITEMS",
+      items,
+      "",
+      "WHAT TO DO",
+      "  1. Contact the customer for their delivery address.",
+      "  2. Place the order for them (or ask them to re-order) and mark it paid in the admin panel,",
+      "     OR refund the payment in the Razorpay dashboard if they no longer want it.",
+      "  3. No stock has been deducted for this payment.",
+    ].join("\n"),
+  });
+};
+
 /** Sent to everyone who clicked "Notify Me" once a product is back in stock. */
 const sendBackInStockEmail = async (user, product) => {
   await sendMail({
@@ -170,6 +208,7 @@ const sendAdminContactQueryAlert = async (query) => {
 
 module.exports = {
   verifyEmailSetup,
+  sendAdminManualOrderAlert,
   sendOrderConfirmationEmail,
   sendAdminNewOrderAlert,
   sendAdminRefundRequiredAlert,

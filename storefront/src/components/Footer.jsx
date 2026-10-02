@@ -53,6 +53,11 @@ export default function Footer() {
                 Cancellation &amp; Returns
               </Link>
             </li>
+            <li>
+              <Link to="/shipping" className="hover:text-white">
+                Shipping Policy
+              </Link>
+            </li>
           </ul>
         </div>
 

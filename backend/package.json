@@ -9,7 +9,14 @@
     "dev": "nodemon server.js",
     "seed:admin": "node seed/seedAdmin.js",
     "seed:phase2": "node seed/seedPhase2.js",
-    "migrate:slugs": "node seed/migrateSlugs.js"
+    "migrate:slugs": "node seed/migrateSlugs.js",
+    "test": "node --test --test-concurrency=1 tests/",
+    "test:watch": "node --test --watch tests/",
+    "test:coverage": "node --test --experimental-test-coverage --test-concurrency=1 tests/",
+    "verify:email": "node scripts/verifyEmail.js",
+    "verify:trust-proxy": "node scripts/verifyTrustProxy.js",
+    "db:backup": "node scripts/backupDatabase.js",
+    "db:wipe": "node scripts/wipeStoreData.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -26,12 +33,14 @@
     "morgan": "^1.10.0",
     "multer": "^2.0.0",
     "multer-storage-cloudinary": "^4.0.0",
-    "nodemailer": "^6.9.14",
+    "nodemailer": "^10.0.13",
     "pdfkit": "^0.15.0",
     "razorpay": "^2.9.4",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "mongodb-memory-server": "^11.3.0",
+    "nodemon": "^3.1.4",
+    "supertest": "^7.3.1"
   }
 }

@@ -30,3 +30,6 @@ desktop.ini
 coverage/
 .vite/
 *.tsbuildinfo
+
+# Database backups written by backend/scripts/backupDatabase.js (contain customer data)
+backend/backups/

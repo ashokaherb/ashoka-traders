@@ -27,7 +27,24 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.ashokaherbs.com"
+        }
+      ],
+      "destination": "https://ashokaherbs.com/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://ashoka-traders.onrender.com/sitemap.xml"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

@@ -1,0 +1,57 @@
+# Ashoka Traders storefront (ashokaherbs.com)
+#
+# Product, category and policy pages are open to every crawler. Only the account and
+# transaction flows are closed - they are private, personalised and worthless in search.
+# AI/answer-engine crawlers (GPTBot, Google-Extended, ClaudeBot, PerplexityBot) are
+# deliberately NOT blocked: being quotable in an AI answer is free visibility for a small
+# shop. Add "User-agent: GPTBot / Disallow: /" below only if the owner asks to opt out.
+
+User-agent: *
+Allow: /
+Disallow: /checkout
+Disallow: /cart
+Disallow: /my-orders
+Disallow: /profile
+Disallow: /wishlist
+Disallow: /order-success/
+Disallow: /login
+Disallow: /register
+# Internal search results - thin, endless, and duplicated from the category pages
+Disallow: /shop?search=
+# The API and the admin panel are on their own hosts, but block the paths in case a
+# reverse proxy ever puts them on this domain.
+Disallow: /api/
+Disallow: /admin
+
+# The two engines that matter most here, stated explicitly so the rules are unmistakable.
+User-agent: Googlebot
+Allow: /
+Disallow: /checkout
+Disallow: /cart
+Disallow: /my-orders
+Disallow: /profile
+Disallow: /wishlist
+Disallow: /order-success/
+Disallow: /login
+Disallow: /register
+Disallow: /api/
+Disallow: /admin
+
+User-agent: Bingbot
+Allow: /
+Disallow: /checkout
+Disallow: /cart
+Disallow: /my-orders
+Disallow: /profile
+Disallow: /wishlist
+Disallow: /order-success/
+Disallow: /login
+Disallow: /register
+Disallow: /api/
+Disallow: /admin
+
+# Image crawling is left fully open - product photos are worth finding.
+User-agent: Googlebot-Image
+Allow: /
+
+Sitemap: https://ashokaherbs.com/sitemap.xml

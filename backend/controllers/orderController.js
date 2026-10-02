@@ -17,59 +17,10 @@ const { ORDER_STATUS_TRANSITIONS, canMoveOrderStatus } = require("../utils/order
 const {
   sendOrderConfirmationEmail,
   sendAdminNewOrderAlert,
-  sendAdminRefundRequiredAlert,
 } = require("../utils/sendEmail");
-const { sendWhatsAppMessage } = require("../utils/whatsappService");
-const { generateInvoicePDF, renderInvoicePDFBuffer, invoiceFileName } = require("../utils/generateInvoicePDF");
-
-// Fire-and-forget email helper - a slow/broken mail server should never block an order.
-// Both emails (customer confirmation + admin new-order alert) carry the order's bill PDF,
-// the same document as the "Download Invoice" button. If the PDF can't be built for any
-// reason, the emails still go out without it.
-const notifyByEmail = (user, order) => {
-  (async () => {
-    let attachments = [];
-    try {
-      const settings = await getSettings();
-      const orderForBill = { ...order.toObject(), user: { name: user.name, email: user.email } };
-      const pdf = await renderInvoicePDFBuffer(orderForBill, settings);
-      attachments = [{ filename: invoiceFileName(order, settings), content: pdf, contentType: "application/pdf" }];
-    } catch (err) {
-      console.error(`[EMAIL] Could not build bill PDF for order ${order._id}, sending emails without it:`, err.message);
-    }
-    await Promise.allSettled([
-      sendOrderConfirmationEmail(user, order, attachments),
-      sendAdminNewOrderAlert(order, attachments),
-    ]); // failures are already logged by sendMail
-  })().catch((err) => console.error("Email error:", err.message));
-};
-
-// Transactional WhatsApp messages - order confirmation to the customer and a new-order
-// alert to the admin. These are sent regardless of the customer's promotional opt-in
-// (whatsappOptIn) - only whether we HAVE a number for them matters, since a number is
-// only ever collected through the opt-in flow in the first place (see Register.jsx /
-// Profile.jsx). Promotional broadcasts (offers, new arrivals) are the ones that check
-// whatsappOptIn - see offerController.js / productController.js.
-const notifyByWhatsApp = (user, order) => {
-  const orderNumber = order._id.toString().slice(-8).toUpperCase();
-  const itemsSummary = order.items
-    .map((i) => `${i.name}${i.variantLabel ? ` (${i.variantLabel})` : ""} x${i.quantity}`)
-    .join(", ");
-
-  if (user.whatsappNumber) {
-    sendWhatsAppMessage(
-      user.whatsappNumber,
-      `Hi ${user.name}, your Ashoka Traders order #${orderNumber} is confirmed!\nItems: ${itemsSummary}\nTotal: Rs.${order.total}\nPayment: ${order.paymentMethod} (${order.paymentStatus})`
-    ).catch((err) => console.error("WhatsApp send error:", err.message));
-  }
-
-  if (process.env.ADMIN_WHATSAPP_NUMBER) {
-    sendWhatsAppMessage(
-      process.env.ADMIN_WHATSAPP_NUMBER,
-      `New order #${orderNumber} from ${user.name} - Rs.${order.total} (${order.paymentMethod})`
-    ).catch((err) => console.error("WhatsApp send error:", err.message));
-  }
-};
+const { generateInvoicePDF } = require("../utils/generateInvoicePDF");
+const { notifyByEmail, notifyByWhatsApp } = require("../utils/orderNotifications");
+const { fulfillPaidIntent } = require("../utils/fulfillPaidOrder");
 
 /**
  * @route   POST /api/orders
@@ -132,7 +83,7 @@ const createRazorpayOrder = async (req, res) => {
     return res.status(500).json({ message: "Razorpay is not configured on the server yet" });
   }
 
-  const { items, couponCode } = req.body;
+  const { items, couponCode, address } = req.body;
   const pricing = await resolveOrderPricing({ items, couponCode });
 
   const amountPaise = Math.round(pricing.total * 100); // Razorpay expects paise
@@ -154,6 +105,7 @@ const createRazorpayOrder = async (req, res) => {
     couponCode: pricing.appliedCouponCode,
     total: pricing.total,
     amountPaise,
+    address, // lets the webhook finish this order if the browser never confirms the payment
   });
 
   res.json({
@@ -293,91 +245,24 @@ const verifyRazorpayPayment = async (req, res) => {
       return res.status(409).json({ message: "This payment has already been processed", orderId: existing._id });
     }
 
-    // Built from the STORED intent only - not from anything in req.body except the address.
-    const orderFields = {
-      user: req.user._id,
-      items: claimed.items,
+    // Create the order from the stored intent. Shared with the Razorpay webhook so both
+    // paths behave identically (utils/fulfillPaidOrder.js) - including the sold-out refund
+    // path and the order confirmation emails.
+    const { outcome, order } = await fulfillPaidIntent({
+      intent: claimed,
+      user: req.user,
       address,
-      subtotal: claimed.subtotal,
-      shippingFee: claimed.shippingFee,
-      discount: claimed.discount,
-      couponCode: claimed.couponCode,
-      total: claimed.total,
-      paymentMethod: "Razorpay",
-      razorpayOrderId,
       razorpayPaymentId,
-    };
+      source: "verify",
+    });
 
-    let order;
-    try {
-      // Stock deduction, order creation and burning the intent all commit together
-      // (audit C3) - or none of them do.
-      order = await runInTransaction(async (session) => {
-        await decrementStock(claimed.items, session);
-        // Already paid at the discounted price, so the order goes through even if the
-        // coupon's last use was taken while this customer was paying.
-        if (claimed.couponCode) {
-          const withinLimit = await claimCouponUse(claimed.couponCode, session);
-          if (!withinLimit) {
-            await claimCouponUse(claimed.couponCode, session, { enforceLimit: false });
-            console.warn(`[COUPON LIMIT EXCEEDED] ${claimed.couponCode} used past its limit by paid order (${razorpayOrderId})`);
-          }
-        }
-        const [created] = await Order.create(
-          [
-            {
-              ...orderFields,
-              billNumber: await nextBillNumber(new Date(), session),
-              paymentStatus: "paid",
-              orderStatus: "Placed",
-            },
-          ],
-          { session }
-        );
-        await PaymentIntent.updateOne(
-          { _id: claimed._id },
-          { $set: { status: "consumed", order: created._id, razorpayPaymentId } },
-          { session }
-        );
-        return created;
-      });
-    } catch (error) {
-      if (!(error instanceof OutOfStockError)) throw error; // handled by the outer catch
-
-      // The customer HAS paid, but an item sold out between checkout and payment. The
-      // transaction rolled back, so no stock was touched. Don't just return an error and
-      // lose track of their money - record a cancelled order with a refund request so it
-      // shows up in the admin's order list AND the customer's "My Orders".
-      // (Refunds themselves are issued in the Razorpay dashboard.)
-      const refundOrder = await Order.create({
-        ...orderFields,
-        paymentStatus: "refund_requested",
-        orderStatus: "Cancelled",
-      });
-      await PaymentIntent.updateOne(
-        { _id: claimed._id },
-        // No TTL - keep this record until the refund is dealt with
-        { $set: { status: "needs_refund", order: refundOrder._id, razorpayPaymentId, expiresAt: null } }
-      );
-      console.error(
-        `[REFUND NEEDED] Paid order could not be fulfilled - ${error.message}.`,
-        JSON.stringify({ orderId: refundOrder._id, razorpayPaymentId, amount: claimed.total, userId: req.user._id })
-      );
-      // Fire-and-forget, like the other notifications - a mail failure must not change
-      // the response. The order record + log line above are the fallback if it fails.
-      sendAdminRefundRequiredAlert(refundOrder, { user: req.user, reason: error.message }).catch((err) =>
-        console.error("Email error (refund alert):", err.message)
-      );
-
+    if (outcome === "refund_pending") {
       return res.status(409).json({
-        message: `Sorry - ${error.message} while your payment was processing, so we couldn't place this order. Your payment of Rs.${claimed.total} will be refunded in full to your original payment method.`,
-        orderId: refundOrder._id,
+        message: `Sorry - an item sold out while your payment was processing, so we couldn't place this order. Your payment of Rs.${claimed.total} will be refunded in full to your original payment method.`,
+        orderId: order._id,
         refundPending: true,
       });
     }
-
-    notifyByEmail(req.user, order);
-    notifyByWhatsApp(req.user, order);
 
     return res.status(201).json(order);
   } catch (error) {

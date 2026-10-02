@@ -125,7 +125,11 @@ it once on the live service - it takes two minutes:
    | Your real IP both times | Correct | Nothing - leave `TRUST_PROXY` unset |
    | A Render/Cloudflare address, not yours | Too few proxies trusted - all visitors would share one IP | Set `TRUST_PROXY=2`, redeploy, re-check |
    | `6.6.6.6` in the second response | Too many trusted - IPs can be faked | Set `TRUST_PROXY` one lower, redeploy, re-check |
-5. **Delete `DEBUG_IP_ENDPOINT`** afterwards and redeploy. (While it's on, the logs show a
+5. Or run the check for yourself in one command (same two requests, with the verdict):
+   ```bash
+   cd backend && npm run verify:trust-proxy -- https://YOUR-SERVICE.onrender.com
+   ```
+6. **Delete `DEBUG_IP_ENDPOINT`** afterwards and redeploy. (While it's on, the logs show a
    `DEBUG_IP_ENDPOINT is on` warning as a reminder.)
 
 ### 2.6 Outbound IPs (Atlas + Brevo)
@@ -140,6 +144,37 @@ Add them to:
   `525 Unauthorized IP address`, exactly like they did from your laptop. (Brevo accepts
   individual IPs; if a range is too large to enter, you can turn Brevo's IP blocking off
   and rely on the SMTP key, or buy dedicated outbound IPs on Render.)
+
+---
+
+### 2.7 Razorpay webhook (recovers payments the browser never confirms)
+
+Normally the customer's browser calls `/api/orders/razorpay/verify` the instant Razorpay
+reports a successful payment, and the order is created. If they close the tab, lose signal
+or their phone dies in that second, the money is taken and **no order exists**. The webhook
+is Razorpay telling the server directly, so the order is still created.
+
+1. Choose a secret (any long random string) and add it on Render:
+   `RAZORPAY_WEBHOOK_SECRET` = that value -> save (it redeploys).
+2. Razorpay Dashboard -> **Settings -> Webhooks -> Add New Webhook**:
+   | Field | Value |
+   |---|---|
+   | Webhook URL | `https://YOUR-SERVICE.onrender.com/api/webhooks/razorpay` |
+   | Secret | the same value you put on Render |
+   | Active events | `payment.captured` |
+3. Save, then use Razorpay's **Send test webhook** button. The Render logs should show
+   `[RAZORPAY WEBHOOK]`. A real captured payment logs
+   `recovered a payment the browser never confirmed -> created`.
+
+Notes:
+- Without `RAZORPAY_WEBHOOK_SECRET` the endpoint answers `503` and does nothing - it never
+  trusts an unsigned call.
+- It is idempotent: duplicate deliveries, or a payment the browser already confirmed, create
+  no second order and deduct no stock twice.
+- It only acts when Razorpay's amount matches the price this server stored; a mismatch is
+  flagged for investigation instead.
+- If a session somehow has no shipping address, the payment is marked `needs_manual` and an
+  email goes to `ADMIN_EMAIL` - nothing is invented.
 
 ---
 
@@ -247,13 +282,83 @@ After domains are live, update every URL setting and redeploy:
 - **Both `vercel.json` files:** `npm run vercel:config -- https://api.yourdomain.com/api` in
   each app, commit, push (the Vercel build refuses to deploy until you do)
 
-**About `/sitemap.xml`**: it's served by the backend (`api.yourdomain.com/sitemap.xml`), but
-search engines expect it at your storefront's own domain. Either submit
-`api.yourdomain.com/sitemap.xml` directly in Google Search Console (it accepts a sitemap on
-a subdomain you've verified), or add a rewrite to `buildVercelConfig` in
-`storefront/securityHeaders.js` **before** the catch-all one -
-`{ source: "/sitemap.xml", destination: "https://api.yourdomain.com/sitemap.xml" }` - then
-re-run `npm run vercel:config` and commit.
+**About `/sitemap.xml`**: the generated `vercel.json` already proxies
+`https://ashokaherbs.com/sitemap.xml` to the backend's live sitemap, which is also what
+`storefront/public/robots.txt` points search engines at. If the backend URL changes, re-run
+`npm run vercel:config -- <new API URL>` and commit, and the proxy follows.
+
+### The `www` subdomain
+
+`vercel.json` already redirects `www.ashokaherbs.com` to `https://ashokaherbs.com` (308,
+keeping the path), but a redirect can only run once the domain actually reaches Vercel:
+
+1. **Vercel** -> storefront project -> **Settings -> Domains** -> **Add** `www.ashokaherbs.com`.
+2. **GoDaddy** -> DNS -> add the record Vercel shows (normally `CNAME` `www` ->
+   `cname.vercel-dns.com`).
+3. Wait for Vercel to show the domain as **Valid Configuration** and issue its certificate.
+4. Check all four entry points end up on the apex over HTTPS:
+   ```bash
+   curl -sI http://ashokaherbs.com      | head -1
+   curl -sI https://www.ashokaherbs.com | head -1   # expect 308 -> https://ashokaherbs.com/
+   ```
+Leave `STOREFRONT_URL` on Render as `https://ashokaherbs.com` (no `www`) - that is the
+canonical origin CORS allows, and www traffic is redirected to it before any API call.
+
+---
+
+## 5b. Search engines (Google Search Console + Bing)
+
+The storefront already serves everything the search engines expect - this section is only
+the one-time wiring on their side. Do it AFTER the domain is live on HTTPS.
+
+### 5b.1 Verify the domain in Google Search Console
+
+1. <https://search.google.com/search-console> > Add property.
+2. Prefer the **Domain** property (`ashokaherbs.com`) - it covers http/https and www in one
+   go, and is verified with a TXT record at GoDaddy rather than a file. Use the **URL
+   prefix** property only if DNS access isn't available.
+3. If you verify with the **HTML file** method instead, the file Google gives you
+   (`googleXXXXXXXX.html`) must be saved in `storefront/public/` **and committed**. Vercel
+   rebuilds from git, so a file that exists only on your computer disappears at the next
+   deploy and verification silently fails.
+
+### 5b.2 Submit the sitemap
+
+Search Console > Sitemaps > enter `sitemap.xml` > Submit.
+
+`https://ashokaherbs.com/sitemap.xml` is rewritten by Vercel to the backend, which builds
+it live from the database: homepage, `/shop`, every active product and category by slug,
+and the policy pages. Nothing has to be regenerated when the catalogue changes - a new
+product appears in the sitemap immediately, with its own `lastmod`.
+
+Repeat at <https://www.bing.com/webmasters> (Bing can import the Search Console property
+in one click, which also covers DuckDuckGo).
+
+### 5b.3 Check the structured data and speed
+
+After the deploy, run these two tools against the live URLs (both are free, no login):
+
+| Tool | URL to test | Expect |
+|---|---|---|
+| [Rich Results Test](https://search.google.com/test/rich-results) | `https://ashokaherbs.com/` | Organization, GroceryStore (local business), WebSite - no errors |
+| Rich Results Test | `https://ashokaherbs.com/product/<any-real-slug>` | **Product snippet** with the right price/availability, plus Breadcrumbs |
+| Rich Results Test | `https://ashokaherbs.com/category/<any-real-slug>` | Breadcrumbs |
+| [PageSpeed Insights](https://pagespeed.web.dev/) | home, a category page, a product page | Core Web Vitals; LCP is the hero/first product image |
+
+A warning about a missing `aggregateRating` or `review` on products is expected and
+correct - the shop has no customer-review feature, and inventing review markup is a
+structured-data policy violation. Revisit only if reviews are actually built.
+
+### 5b.4 WhatsApp / social link previews - known limit
+
+The storefront is a single-page app: Google runs JavaScript and sees each page's own
+title, description and schema, but WhatsApp, Facebook and most chat apps do **not**. They
+read the raw HTML, so a shared product link previews with the site-wide card from
+`storefront/index.html` (logo, shop name, `og-image.png`) rather than that product's own
+photo and price. The link still works and still looks professional.
+
+Giving every product its own preview needs server-side rendering or a prerender service -
+a real piece of work, worth doing only if WhatsApp sharing becomes a main sales channel.
 
 ---
 
@@ -268,7 +373,9 @@ re-run `npm run vercel:config` and commit.
 - [ ] A test order goes through end-to-end (a small real Razorpay payment, or COD)
 - [ ] Order confirmation + admin alert emails actually arrive (not just console logs)
 - [ ] Admin panel loads, login works, Dashboard shows real data
-- [ ] `sitemap.xml` reachable wherever you routed it
+- [ ] `sitemap.xml` reachable wherever you routed it, and `robots.txt` serves at the apex
+- [ ] Google Search Console property verified and the sitemap submitted (5b)
+- [ ] Rich Results Test clean on the homepage, a product page and a category page (5b.3)
 - [ ] Google Analytics Realtime shows activity as you browse (and no CSP errors for GA)
 - [ ] HTTPS padlock on all three domains (no mixed-content warnings)
 

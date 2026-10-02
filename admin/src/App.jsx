@@ -19,6 +19,7 @@ const OrderDetail = lazy(() => import("./pages/OrderDetail"));
 const CouponManagement = lazy(() => import("./pages/CouponManagement"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const AdminProfile = lazy(() => import("./pages/AdminProfile"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 export default function App() {
   return (
@@ -47,6 +48,8 @@ export default function App() {
         <Route path="/coupons" element={<CouponManagement />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/profile" element={<AdminProfile />} />
+        {/* Unknown admin URL: show a 404 inside the normal shell, not a blank page */}
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   );

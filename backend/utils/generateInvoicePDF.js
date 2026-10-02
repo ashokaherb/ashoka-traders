@@ -355,9 +355,15 @@ function drawFooter(doc, y, order, type, settings) {
  * @param {import("../models/Settings")} settings
  * @param {import("stream").Writable & { setHeader?: Function }} res - HTTP response or any writable stream
  */
-function generateInvoicePDF(order, settings, res) {
+function generateInvoicePDF(order, settings, res, { compress = true } = {}) {
   const type = resolveDocumentType(settings);
-  const doc = new PDFDocument({ size: "A4", margin: MARGIN, info: { Title: `${TITLES[type]} ${order.billNumber || ""}`.trim() } });
+  // compress:false is only used by the tests, so they can read the text back out of the PDF.
+  const doc = new PDFDocument({
+    size: "A4",
+    margin: MARGIN,
+    compress,
+    info: { Title: `${TITLES[type]} ${order.billNumber || ""}`.trim() },
+  });
 
   if (typeof res.setHeader === "function") {
     res.setHeader("Content-Type", "application/pdf");
@@ -385,7 +391,7 @@ function invoiceFileName(order, settings) {
  * Renders the same bill as generateInvoicePDF into memory, for attaching to emails.
  * @returns {Promise<Buffer>}
  */
-function renderInvoicePDFBuffer(order, settings) {
+function renderInvoicePDFBuffer(order, settings, options = {}) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     const sink = new Writable({
@@ -397,7 +403,7 @@ function renderInvoicePDFBuffer(order, settings) {
     sink.on("finish", () => resolve(Buffer.concat(chunks)));
     sink.on("error", reject);
     try {
-      generateInvoicePDF(order, settings, sink);
+      generateInvoicePDF(order, settings, sink, options);
     } catch (error) {
       reject(error);
     }

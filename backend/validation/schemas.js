@@ -134,7 +134,9 @@ const codOrder = z.object({
   paymentMethod: z.literal("COD", { errorMap: () => ({ message: "Use /api/orders/razorpay for online payment" }) }),
 });
 
-const razorpayOrder = z.object({ items: cartItems, couponCode });
+// The address is optional here only so an older storefront build keeps working; the
+// current one always sends it, which is what lets the webhook complete an order on its own.
+const razorpayOrder = z.object({ items: cartItems, couponCode, address: address.optional() });
 
 const razorpayVerify = z.object({
   razorpay_order_id: text("Payment reference", 100),
@@ -245,6 +247,45 @@ const couponUpdate = z
   .object(Object.fromEntries(Object.entries(couponFields).map(([key, schema]) => [key, schema.optional()])))
   .refine((body) => Object.keys(body).length > 0, "Nothing to update");
 
+// --- Store settings (admin) ----------------------------------------------------------------
+
+// Real GSTIN shape: 2-digit state code, 10-character PAN, entity digit, "Z", checksum.
+const GSTIN_RE = /^[0-3][0-9][A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+// Sample/demo values that appear in tutorials and in this project's own README. Saving one
+// would put a fake GSTIN on real customer bills, so they are refused outright.
+const PLACEHOLDER_GSTINS = ["22AAAAA0000A1Z5", "27AAAAA0000A1Z5", "29AAAAA0000A1Z5"];
+
+const settingsUpdate = z.object({
+  storeName: optionalText("Store name", 100),
+  freeShippingThreshold: money("Free shipping threshold").optional(),
+  flatShippingFee: money("Flat shipping fee").optional(),
+  minimumOrderValue: money("Minimum order value").optional(),
+  gstScheme: z
+    .enum(["not_registered", "composition", "regular"], {
+      errorMap: () => ({ message: "GST scheme must be Not Registered, Composition or Regular" }),
+    })
+    .optional(),
+  gstNumber: z
+    .string({ invalid_type_error: "GSTIN must be text" })
+    .trim()
+    .toUpperCase()
+    .refine((v) => v === "" || GSTIN_RE.test(v), "That is not a valid 15-character GSTIN")
+    .refine((v) => !PLACEHOLDER_GSTINS.includes(v), "That is a sample GSTIN - enter the shop's real one")
+    .optional(),
+  gstRate: z.number({ invalid_type_error: "GST rate must be a number" }).min(0).max(40, "GST rate looks too high").optional(),
+  storeState: optionalText("Store state", 100),
+  storeAddress: optionalText("Store address", 300),
+  panNumber: z
+    .string({ invalid_type_error: "PAN must be text" })
+    .trim()
+    .toUpperCase()
+    .refine((v) => v === "" || /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v), "That is not a valid 10-character PAN")
+    .optional(),
+  invoiceTerms: optionalText("Invoice terms", 1000),
+  supportEmail: z.union([z.literal(""), email]).optional(),
+  supportPhone: optionalPhone,
+});
+
 // --- Order status (admin) ------------------------------------------------------------------------
 
 const ORDER_STATUSES = ["Placed", "Packed", "Shipped", "Delivered", "Cancelled"];
@@ -271,6 +312,7 @@ module.exports = {
   productUpdate,
   couponCreate,
   couponUpdate,
+  settingsUpdate,
   orderStatusUpdate,
   ORDER_STATUSES,
 };

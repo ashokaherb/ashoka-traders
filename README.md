@@ -353,6 +353,82 @@ invoice from My Orders/Order Success/admin Order Detail after each change:
 
 ---
 
+## Automated tests
+
+The backend has a test suite covering the money-and-data paths: payments, stock, coupons,
+orders, auth, the bill PDF and the sitemap. It uses Node's built-in test runner plus supertest, and spins
+up its own in-memory MongoDB replica set - no external services, no credentials, nothing
+touches a real database.
+
+```bash
+cd backend
+npm test              # run everything (~90s, 111 tests)
+npm run test:watch    # re-run on save while developing
+npm run test:coverage # with a coverage summary
+```
+
+What is covered:
+
+| File | Covers |
+|---|---|
+| `tests/auth.test.js` | registration, duplicate emails, login, protected and admin-only routes, expired/forged/over-age tokens, refresh rules |
+| `tests/payment.test.js` | server-side pricing, signature check, replay, wrong amount/currency, another user's payment, altered cart, sold-out refund path |
+| `tests/webhook.test.js` | signature verification, idempotency, duplicate deliveries, amount mismatch, stale sessions, missing address |
+| `tests/inventory.test.js` | stock deduction, overselling under concurrency (simple and variant), multi-item rollback |
+| `tests/coupons.test.js` | percent/flat discounts, expiry, minimum order, usage limits, concurrent claims, discount cap |
+| `tests/orders.test.js` | totals, bill numbers, free-shipping threshold, access control, status transitions, CSV export escaping |
+| `tests/security.test.js` | NoSQL injection, mass assignment, admin route protection, rate limiting, data exposure |
+| `tests/invoice.test.js` | Bill of Supply vs Tax Invoice vs Receipt, disclosure text, amount in words, financial-year numbering, download permissions |
+| `tests/settings.test.js` | GST scheme/GSTIN/PAN validation (including rejecting sample GSTINs), shipping values, admin-only access |
+| `tests/sitemap.test.js` | `/sitemap.xml` is valid XML, lists static/category/product URLs, hides inactive products and disallowed pages, per-product `lastmod` |
+
+Useful operational scripts (all in `backend/`):
+
+```bash
+npm run verify:email -- you@example.com   # checks SMTP login, optionally sends a test mail
+npm run verify:trust-proxy -- <API URL>   # confirms rate limits see real visitor IPs
+npm run db:backup                         # JSON export of every collection
+npm run db:wipe                           # dry run; add -- --confirm to clear trial data
+npm run seed:admin -- --rotate            # change the admin password (prints a new one once)
+```
+
+## SEO
+
+Everything the storefront needs to be indexed and to rank is in the repository - the only
+outstanding work is on Google's side (see `DEPLOYMENT.md` 5b).
+
+| Piece | Where |
+|---|---|
+| Per-page title, description, canonical, Open Graph, Twitter card, JSON-LD | `storefront/src/components/Seo.jsx` - used by every page |
+| Business facts, production origin, social profiles | `storefront/src/seo/siteConfig.js` |
+| schema.org builders (Organization, GroceryStore, Product, BreadcrumbList, WebSite) | `storefront/src/seo/structuredData.js` |
+| Visible breadcrumb trail (shares its array with the schema) | `storefront/src/components/Breadcrumbs.jsx` |
+| Static fallback tags + share card for crawlers that don't run JS | `storefront/index.html`, `storefront/public/og-image.png` |
+| Crawl rules | `storefront/public/robots.txt` |
+| Live XML sitemap | `backend/controllers/sitemapController.js` -> `/sitemap.xml` |
+
+Rules worth keeping to when editing any of this:
+
+- **Canonical URLs drop the query string.** `/shop`, `/shop?search=x` and `/shop?page=2`
+  all canonicalise to `/shop`, so filter and sort variants never compete as duplicates.
+  Search-result pages are additionally `noindex, follow`.
+- **Structured data must match the page.** Price, stock and breadcrumbs come from the same
+  values the page renders. Never add `review`/`aggregateRating`: the catalogue's `rating`
+  field is shop-entered, not customer reviews, and marking it up as review data breaches
+  Google's structured-data policy.
+- **No invented facts.** A field we don't have (opening hours, social profiles) is left out
+  of the schema rather than filled with a placeholder - an empty value is dropped by the
+  `compact()` helper in `structuredData.js`.
+- **Alt text is content.** Product images use the product name (plus variant and category);
+  only genuinely decorative icons keep `alt=""`.
+- **Below-the-fold images are `loading="lazy"`** and sized through Cloudinary
+  (`w_X,c_limit,f_auto,q_auto`); the product page's main photo stays eager because it is
+  the LCP element.
+
+Verified in a real browser with 41 automated checks (titles, canonicals, duplicate-tag
+takeover, every schema block, breadcrumb/schema agreement, alt text, lazy loading,
+`robots.txt`, `og-image.png`), plus 7 backend tests for `/sitemap.xml`.
+
 ## Project notes / design decisions
 
 - **One User model** for both customers and the admin, distinguished by `isAdmin`. There is
