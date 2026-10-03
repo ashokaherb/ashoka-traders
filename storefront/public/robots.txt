@@ -1,4 +1,4 @@
-# Ashoka Traders storefront (ashokaherbs.com)
+# Aashoka Traders storefront (ashokaherbs.com)
 #
 # Product, category and policy pages are open to every crawler. Only the account and
 # transaction flows are closed - they are private, personalised and worthless in search.

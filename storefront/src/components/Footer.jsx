@@ -11,7 +11,7 @@ import codIcon from "../assets/icons/cod.png";
 // actual profile once it exists (currently just "#").
 const PHONE = "+91 98972 05657";
 const EMAIL = "ashokaherb@gmail.com";
-const ADDRESS = "Ashoka Traders - Herbs & Dry Fruits, 3 Dhamawala Bazaar, Dehradun";
+const ADDRESS = "Aashoka Traders - Herbs & Dry Fruits, 3 Dhamawala Bazaar, Dehradun";
 const INSTAGRAM_URL = "#";
 
 // Shown on every storefront page (mounted once in App.jsx, outside <Routes>).
@@ -111,7 +111,7 @@ export default function Footer() {
       </div>
 
       <div className="border-t border-gray-800 text-center text-xs py-4 text-gray-500">
-        &copy; {new Date().getFullYear()} Ashoka Traders. All rights reserved.
+        &copy; {new Date().getFullYear()} Aashoka Traders. All rights reserved.
       </div>
     </footer>
   );

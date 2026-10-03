@@ -114,7 +114,7 @@ app.use("/api/contact", contactLimiter);
 
 // --- Routes ---
 app.get("/", (req, res) => {
-  res.json({ message: "Ashoka Traders API is running" });
+  res.json({ message: "Aashoka Traders API is running" });
 });
 
 // Simple health check for uptime monitors / hosting platforms (Render's Health Check Path).

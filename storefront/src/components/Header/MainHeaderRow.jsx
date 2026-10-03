@@ -21,7 +21,7 @@ export default function MainHeaderRow({ settings, onToggleMenu, menuOpen }) {
   const { wishlistIds } = useWishlist();
   const navigate = useNavigate();
 
-  const storeName = settings?.storeName || "Ashoka Traders";
+  const storeName = settings?.storeName || "Aashoka Traders";
 
   const handleSearch = (e) => {
     e.preventDefault();

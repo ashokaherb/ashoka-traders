@@ -64,7 +64,7 @@ export default function ProductDetail() {
   // engines truncate), followed by the real price and an availability hint so the snippet
   // answers "how much?" and "can I buy it?" without a click.
   const availabilityHint = displayStock > 0 ? "In stock" : "Currently out of stock";
-  const descriptionBody = (product.description || `Buy ${product.name} online at Ashoka Traders.`)
+  const descriptionBody = (product.description || `Buy ${product.name} online at Aashoka Traders.`)
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 155);
@@ -112,7 +112,7 @@ export default function ProductDetail() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
       <Seo
-        title={`${product.name} — Buy Online | Ashoka Traders`}
+        title={`${product.name} — Buy Online | Aashoka Traders`}
         description={metaDescription}
         canonicalPath={`/product/${product.slug}`}
         type="product"

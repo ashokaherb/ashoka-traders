@@ -284,7 +284,7 @@ const broadcastNewArrival = async (req, res) => {
     "whatsappNumber"
   );
 
-  const message = `New arrival at Ashoka Traders: ${product.name}${
+  const message = `New arrival at Aashoka Traders: ${product.name}${
     product.category ? ` (${product.category.name})` : ""
   } - now Rs.${product.price}. Check it out!`;
   const result = await sendWhatsAppBroadcast(

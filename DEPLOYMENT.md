@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This guide walks through taking Ashoka Traders from your local machine to a live,
+This guide walks through taking Aashoka Traders from your local machine to a live,
 publicly-reachable site. There are three separate deployables:
 
 ```

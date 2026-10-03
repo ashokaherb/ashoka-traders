@@ -48,7 +48,7 @@ const notifyByWhatsApp = (user, order) => {
   if (user.whatsappNumber) {
     sendWhatsAppMessage(
       user.whatsappNumber,
-      `Hi ${user.name}, your Ashoka Traders order #${orderNumber} is confirmed!\nItems: ${itemsSummary}\nTotal: Rs.${order.total}\nPayment: ${order.paymentMethod} (${order.paymentStatus})`
+      `Hi ${user.name}, your Aashoka Traders order #${orderNumber} is confirmed!\nItems: ${itemsSummary}\nTotal: Rs.${order.total}\nPayment: ${order.paymentMethod} (${order.paymentStatus})`
     ).catch((err) => console.error("WhatsApp send error:", err.message));
   }
 

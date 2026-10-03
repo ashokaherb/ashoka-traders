@@ -22,7 +22,7 @@ const settingsSchema = new mongoose.Schema(
     },
     storeName: {
       type: String,
-      default: "Ashoka Traders",
+      default: "Aashoka Traders",
     },
     // GSTIN. Blank = plain receipt, whatever gstScheme says.
     gstNumber: {

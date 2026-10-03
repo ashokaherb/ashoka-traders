@@ -168,7 +168,7 @@ export default function Checkout() {
         amount: rp.amount,
         currency: rp.currency,
         order_id: rp.razorpayOrderId,
-        name: "Ashoka Traders",
+        name: "Aashoka Traders",
         description: "Order payment",
         prefill: { name: address.name, contact: address.phone },
         theme: { color: "#3d6923" }, // brand-600, keep in sync with tailwind.config.js
@@ -205,7 +205,7 @@ export default function Checkout() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 grid md:grid-cols-3 gap-6">
       {/* Transaction page - never indexed */}
-      <Seo title="Checkout | Ashoka Traders" description="Confirm your delivery address and place your order." noindex />
+      <Seo title="Checkout | Aashoka Traders" description="Confirm your delivery address and place your order." noindex />
       <form
         onSubmit={handlePlaceOrder}
         className="md:col-span-2 bg-white rounded-lg shadow-sm p-6 flex flex-col gap-4"

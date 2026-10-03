@@ -36,7 +36,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="max-w-sm w-full bg-white p-6 rounded-lg shadow-sm">
         <h1 className="text-2xl font-bold mb-1 text-gray-800">Admin Login</h1>
-        <p className="text-sm text-gray-500 mb-4">Ashoka Traders management panel</p>
+        <p className="text-sm text-gray-500 mb-4">Aashoka Traders management panel</p>
 
         {sessionExpired && !error && (
           <p className="mb-4 text-sm text-amber-900 bg-amber-50 p-2 rounded">

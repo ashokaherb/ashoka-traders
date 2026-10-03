@@ -26,10 +26,10 @@ export const LOGO_URL = absoluteUrl("/apple-touch-icon.png");
 
 export const SITE = {
   /** Trading name. Admin > Settings can change the on-page name; this is the SEO default. */
-  name: "Ashoka Traders",
+  name: "Aashoka Traders",
   tagline: "Buy Dry Fruits, Herbs & Natural Grocery Online",
   description:
-    "Buy premium dry fruits, herbs, spices and natural grocery online from Ashoka Traders, Dehradun. Honest quality, fair prices and delivery across India with cash on delivery.",
+    "Buy premium dry fruits, herbs, spices and natural grocery online from Aashoka Traders, Dehradun. Honest quality, fair prices and delivery across India with cash on delivery.",
 
   // Postal address - matches the Google Business Profile and the invoice footer.
   address: {

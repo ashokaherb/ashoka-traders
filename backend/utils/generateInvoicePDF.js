@@ -58,7 +58,7 @@ const itemName = (lineItem) => lineItem.name + (lineItem.variantLabel ? ` (${lin
 
 function drawHeader(doc, type, order, settings) {
   const top = MARGIN;
-  const storeName = settings.storeName || "Ashoka Traders";
+  const storeName = settings.storeName || "Aashoka Traders";
 
   // Left: business details
   doc.fillColor(C.brandDark).font("Helvetica-Bold").fontSize(20).text(storeName, LEFT, top, { width: 320 });
@@ -280,7 +280,7 @@ function drawTotals(doc, y, order, type, taxInfo) {
 }
 
 function drawFooter(doc, y, order, type, settings) {
-  const storeName = settings.storeName || "Ashoka Traders";
+  const storeName = settings.storeName || "Aashoka Traders";
   const terms = (settings.invoiceTerms || "")
     .split("\n")
     .map((t) => t.trim())

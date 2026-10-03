@@ -90,7 +90,7 @@ const formatOrderSummary = (order) => {
 const sendOrderConfirmationEmail = async (user, order, attachments = []) => {
   await sendMail({
     to: user.email,
-    subject: `Your Ashoka Traders order #${order._id} is confirmed`,
+    subject: `Your Aashoka Traders order #${order._id} is confirmed`,
     text:
       `Hi ${user.name},\n\nThanks for your order! Here's a summary:\n\n${formatOrderSummary(order)}\n\n` +
       (attachments.length ? "Your bill is attached as a PDF.\n\n" : "") +
@@ -193,7 +193,7 @@ const sendBackInStockEmail = async (user, product) => {
   await sendMail({
     to: user.email,
     subject: `${product.name} is back in stock!`,
-    text: `Hi ${user.name},\n\nGood news - "${product.name}" is back in stock at Ashoka Traders.\n\nGrab it before it sells out again!`,
+    text: `Hi ${user.name},\n\nGood news - "${product.name}" is back in stock at Aashoka Traders.\n\nGrab it before it sells out again!`,
   });
 };
 

@@ -1,4 +1,4 @@
-# Ashoka Traders - E-commerce Monorepo
+# Aashoka Traders - E-commerce Monorepo
 
 A MERN stack e-commerce project for a small Indian retail shop, with two customer-facing
 apps and one shared API:
@@ -89,7 +89,7 @@ npm run dev
 ```
 
 The API runs at **http://localhost:5000** by default. Visit http://localhost:5000/ in a
-browser - you should see `{"message":"Ashoka Traders API is running"}`.
+browser - you should see `{"message":"Aashoka Traders API is running"}`.
 
 ### Backend API reference
 

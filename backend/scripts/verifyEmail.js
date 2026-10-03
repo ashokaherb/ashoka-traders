@@ -80,7 +80,7 @@ const sampleOrder = {
   }
 
   const pdf = await renderInvoicePDFBuffer(sampleOrder, {
-    storeName: "Ashoka Traders",
+    storeName: "Aashoka Traders",
     gstScheme: process.env.TEST_GST_SCHEME || "not_registered",
     gstNumber: "",
     storeAddress: "Sample address",
@@ -89,9 +89,9 @@ const sampleOrder = {
   await transporter.sendMail({
     from: process.env.EMAIL_FROM || process.env.SMTP_USER,
     to,
-    subject: "Ashoka Traders - email delivery test",
+    subject: "Aashoka Traders - email delivery test",
     text: [
-      "This is a test email from the Ashoka Traders backend.",
+      "This is a test email from the Aashoka Traders backend.",
       "",
       "If you can read this, SMTP delivery works from this server.",
       "A sample bill PDF is attached - the same generator used for real orders.",

@@ -9,7 +9,7 @@ import { isClientTodo } from "../content/legalConfig";
 export default function LegalPage({ title, description, lastUpdated, children }) {
   return (
     <div className="bg-cream min-h-screen">
-      <Seo title={`${title} | Ashoka Traders`} description={description} type="article" />
+      <Seo title={`${title} | Aashoka Traders`} description={description} type="article" />
 
       <div className="max-w-3xl mx-auto px-4 py-8 sm:py-10">
         <div className="bg-white rounded-lg shadow-sm p-5 sm:p-8">

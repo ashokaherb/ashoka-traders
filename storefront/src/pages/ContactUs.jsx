@@ -27,8 +27,8 @@ export default function ContactUs() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
       <Seo
-        title="Contact Us | Ashoka Traders"
-        description="Call, WhatsApp, email or message Ashoka Traders, Dehradun - for orders, cancellations, delivery questions and bulk enquiries."
+        title="Contact Us | Aashoka Traders"
+        description="Call, WhatsApp, email or message Aashoka Traders, Dehradun - for orders, cancellations, delivery questions and bulk enquiries."
       />
 
       <div className="bg-white rounded-lg shadow-sm p-8">
@@ -63,7 +63,7 @@ export default function ContactUs() {
             </a>
           </li>
           <li>
-            <span className="font-medium">Address:</span> Ashoka Traders - Herbs &amp; Dry
+            <span className="font-medium">Address:</span> Aashoka Traders - Herbs &amp; Dry
             Fruits, 3 Dhamawala Bazaar, Dehradun
           </li>
         </ul>

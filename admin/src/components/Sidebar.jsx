@@ -53,7 +53,7 @@ export default function Sidebar({ open, onClose }) {
     <div className="flex flex-col h-full bg-gray-900">
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
         <NavLink to="/" className="text-white font-bold leading-tight" onClick={onClose}>
-          Ashoka Traders
+          Aashoka Traders
           <span className="block text-[11px] font-normal text-gray-400 tracking-wide">
             ADMIN PANEL
           </span>

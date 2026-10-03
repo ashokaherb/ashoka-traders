@@ -1,7 +1,7 @@
 {
   "name": "ashoka-traders-backend",
   "version": "1.0.0",
-  "description": "REST API for Ashoka Traders e-commerce site (Express + MongoDB)",
+  "description": "REST API for Aashoka Traders e-commerce site (Express + MongoDB)",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

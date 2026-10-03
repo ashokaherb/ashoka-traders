@@ -54,7 +54,7 @@ export default function Wishlist() {
   return (
     <div className="bg-cream min-h-screen">
       <Helmet>
-        <title>My Wishlist - Ashoka Traders</title>
+        <title>My Wishlist - Aashoka Traders</title>
       </Helmet>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-6">

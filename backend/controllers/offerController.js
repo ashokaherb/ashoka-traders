@@ -101,7 +101,7 @@ const broadcastOffer = async (req, res) => {
     scopeText = category ? category.name : "select products";
   }
 
-  const message = `${offer.title}\n${offer.discountPercent}% off on ${scopeText} at Ashoka Traders - shop now!`;
+  const message = `${offer.title}\n${offer.discountPercent}% off on ${scopeText} at Aashoka Traders - shop now!`;
   const result = await sendWhatsAppBroadcast(
     recipients.map((u) => u.whatsappNumber),
     message

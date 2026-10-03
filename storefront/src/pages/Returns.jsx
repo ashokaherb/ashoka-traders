@@ -5,7 +5,7 @@ import { useAppData } from "../context/AppDataContext";
 
 export default function Returns() {
   const { settings } = useAppData();
-  const storeName = settings?.storeName || "Ashoka Traders";
+  const storeName = settings?.storeName || "Aashoka Traders";
   const email = settings?.supportEmail || "ashokaherb@gmail.com";
   const phone = settings?.supportPhone || "+91 98972 05657";
   const hours = LEGAL.damageReportWindowHours;

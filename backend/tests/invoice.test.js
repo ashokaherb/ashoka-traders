@@ -36,7 +36,7 @@ const sampleOrder = (overrides = {}) => ({
   ...overrides,
 });
 
-const COMPOSITION = { storeName: "Ashoka Traders", gstNumber: "05ABCDE1234F1Z5", gstScheme: "composition", storeAddress: "Dehradun", invoiceTerms: "Keep this bill." };
+const COMPOSITION = { storeName: "Aashoka Traders", gstNumber: "05ABCDE1234F1Z5", gstScheme: "composition", storeAddress: "Dehradun", invoiceTerms: "Keep this bill." };
 
 /** The visible text of the PDF (page content is compressed - see helpers/pdfText.js). */
 const pdfText = (buffer) => extractPdfText(buffer);
@@ -101,7 +101,7 @@ describe("bill PDF", () => {
   test("an unregistered shop gets a receipt with no GSTIN and no disclosure", async () => {
     const pdf = await renderInvoicePDFBuffer(
       sampleOrder(),
-      { storeName: "Ashoka Traders", gstScheme: "not_registered", gstNumber: "" },
+      { storeName: "Aashoka Traders", gstScheme: "not_registered", gstNumber: "" },
       { compress: false }
     );
     const text = pdfText(pdf);

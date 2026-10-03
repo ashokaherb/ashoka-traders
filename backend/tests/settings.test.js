@@ -36,7 +36,7 @@ describe("store settings", () => {
   test("only an admin can change them", async () => {
     assert.equal((await request.put("/api/settings").send({ storeName: "Hacked" })).status, 401);
     assert.equal((await save({ storeName: "Hacked" }, customerToken)).status, 403);
-    assert.equal((await Settings.findOne()).storeName, "Ashoka Traders");
+    assert.equal((await Settings.findOne()).storeName, "Aashoka Traders");
   });
 
   test("a real GSTIN with the composition scheme is accepted", async () => {
@@ -81,7 +81,7 @@ describe("store settings", () => {
   });
 
   test("unknown fields are ignored instead of being stored", async () => {
-    const res = await save({ storeName: "Ashoka Traders", isAdminBackdoor: true, _id: "000000000000000000000000" });
+    const res = await save({ storeName: "Aashoka Traders", isAdminBackdoor: true, _id: "000000000000000000000000" });
     assert.equal(res.status, 200);
     const stored = await Settings.findOne().lean();
     assert.equal(stored.isAdminBackdoor, undefined);

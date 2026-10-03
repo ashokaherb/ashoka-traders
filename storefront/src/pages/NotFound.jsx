@@ -10,7 +10,7 @@ export default function NotFound() {
   return (
     <div className="bg-cream min-h-screen">
       <Helmet>
-        <title>Page not found - Ashoka Traders</title>
+        <title>Page not found - Aashoka Traders</title>
         <meta name="robots" content="noindex" />
       </Helmet>
 

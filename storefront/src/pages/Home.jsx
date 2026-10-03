@@ -50,7 +50,7 @@ export default function Home() {
       .finally(() => setProductsLoading(false));
   }, []);
 
-  const storeName = settings?.storeName || "Ashoka Traders";
+  const storeName = settings?.storeName || "Aashoka Traders";
 
   return (
     <div className="bg-cream min-h-screen">

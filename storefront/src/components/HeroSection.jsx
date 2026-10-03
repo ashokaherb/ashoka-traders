@@ -22,7 +22,7 @@ const HERO = {
   // (originals were a 474KB PNG-labelled JPEG and a 2.1MB PNG - see note below).
   image: heroImage,
   // Describes the photo for image search and screen readers (it is content, not decoration)
-  imageAlt: "Assorted premium dry fruits, nuts and natural herbs from Ashoka Traders",
+  imageAlt: "Assorted premium dry fruits, nuts and natural herbs from Aashoka Traders",
 };
 
 export default function HeroSection({ storeName }) {
